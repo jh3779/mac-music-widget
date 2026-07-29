@@ -1,0 +1,71 @@
+name: MacMusicWidget
+options:
+  bundleIdPrefix: com.ignasave.macmusicwidget
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGNING_REQUIRED: "YES"
+    CODE_SIGNING_ALLOWED: "YES"
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    ENABLE_HARDENED_RUNTIME: "YES"
+targets:
+  MacMusicWidgetHost:
+    type: application
+    platform: macOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ignasave.macmusicwidget
+        PRODUCT_NAME: Mac Music Widget
+    sources: [Host, Shared]
+    info:
+      path: Host/Info.plist
+      properties:
+        CFBundleName: Mac Music Widget
+        CFBundleDisplayName: Mac Music Widget
+        CFBundleIconFile: AppIcon
+        LSUIElement: true
+        NSAppleEventsUsageDescription: "Reads the currently playing track from Apple Music, Spotify or your browser, and sends playback commands to it."
+        NSHighResolutionCapable: true
+    entitlements:
+      path: Host/Host.entitlements
+      properties:
+        com.apple.security.app-sandbox: false
+        com.apple.security.automation.apple-events: true
+        com.apple.security.network.client: true
+        com.apple.security.network.server: true
+    dependencies:
+      - target: MacMusicWidgetExtension
+        embed: true
+    postBuildScripts:
+      - name: Install app icon
+        script: |
+          ICNS="$SRCROOT/Resources/AppIcon.icns"
+          DEST="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH"
+          if [ -f "$ICNS" ]; then
+            # The Resources folder may not exist yet when this phase runs.
+            mkdir -p "$DEST"
+            cp "$ICNS" "$DEST/AppIcon.icns"
+          fi
+  MacMusicWidgetExtension:
+    type: app-extension
+    platform: macOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ignasave.macmusicwidget.widget
+    sources: [Widget, Shared]
+    info:
+      path: Widget/Info.plist
+      properties:
+        CFBundleDisplayName: Mac Music Widget
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: Widget/Widget.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.network.client: true
