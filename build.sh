@@ -54,7 +54,7 @@ echo "==> Built: build/$APP_NAME.app"
 
 if [[ "$MODE" == "--install" ]]; then
   echo "==> Installing to /Applications"
-  pkill -f "MacMusicWidgetHost" 2>/dev/null || true
+  pkill -f "/Applications/$APP_NAME.app" 2>/dev/null || true
   pkill -f "MacMusicWidgetExtension" 2>/dev/null || true
   sleep 1
   rm -rf "/Applications/$APP_NAME.app"
