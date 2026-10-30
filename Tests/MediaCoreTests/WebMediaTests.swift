@@ -5,7 +5,7 @@ final class WebMediaTests: XCTestCase {
     let now = Date(timeIntervalSince1970: 1_800_000_000)
     func snapshot(_ id: Int = 1, playing: Bool = true, received: Date? = nil, changed: Date? = nil) -> WebMediaSnapshot {
         WebMediaSnapshot(tabID: id, videoID: "dQw4w9WgXcQ", title: "A video", author: "A channel",
-                         isPlaying: playing, receivedAt: received ?? now, changedAt: changed ?? now)
+                         isPlaying: playing, documentID: "7A6341CD-1052-41CC-A8A5-F3AA4B9E2D88", canGoNext: true, canGoPrevious: false, receivedAt: received ?? now, changedAt: changed ?? now)
     }
     func testOnlyFreshSnapshotsParticipate() {
         XCTAssertNil(WebMediaSnapshot.select([snapshot(received: now.addingTimeInterval(-46))], now: now))
@@ -19,7 +19,7 @@ final class WebMediaTests: XCTestCase {
         XCTAssertEqual(WebMediaSnapshot.select([heartbeat, playing], now: now)?.tabID, 2)
     }
     func testNativeBoundaryRejectsUntrustedMetadata() throws {
-        let valid: [String: Any] = ["version": 1, "tabID": 4, "videoID": "dQw4w9WgXcQ", "title": " Video ", "author": "Channel", "isPlaying": true]
+        let valid: [String: Any] = ["version": 1, "tabID": 4, "videoID": "dQw4w9WgXcQ", "title": " Video ", "author": "Channel", "isPlaying": true, "documentID": "7A6341CD-1052-41CC-A8A5-F3AA4B9E2D88", "canGoNext": true, "canGoPrevious": false]
         let decoded = try WebMediaSnapshot.decode(valid, now: now)
         XCTAssertEqual(decoded.title, "Video")
         XCTAssertEqual(decoded.artworkURL, "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg")
@@ -63,11 +63,24 @@ final class WebMediaTests: XCTestCase {
         state.isPlaying = true
         XCTAssertTrue(gate.shouldReload(state, now: now.addingTimeInterval(32), force: true))
     }
-    func testVideoSourceIsReadOnlyAndNamedCorrectly() {
+    func testCommandsAreBoundToDocumentExpireAndAreConsumedOnce() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = WebMediaStore(directory: root)
+        let media = snapshot()
+        try store.enqueue(.playPause, for: media, now: now)
+        XCTAssertNil(store.takeCommand(for: snapshot(2), now: now))
+        XCTAssertEqual(store.takeCommand(for: media, now: now)?.action, .playPause)
+        XCTAssertNil(store.takeCommand(for: media, now: now))
+        try store.enqueue(.next, for: media, now: now)
+        XCTAssertNil(store.takeCommand(for: media, now: now.addingTimeInterval(9)))
+    }
+
+    func testVideoSourceIsNamedCorrectly() {
         var state = NowPlaying.empty
         state.sourceActive = "safariYouTube"
         XCTAssertEqual(state.sourceLabel, "Auto — Safari YouTube")
-        XCTAssertFalse(state.supportsTransport)
+        XCTAssertTrue(state.supportsTransport)
         state.sourceActive = "spotify"
         XCTAssertTrue(state.supportsTransport)
     }
