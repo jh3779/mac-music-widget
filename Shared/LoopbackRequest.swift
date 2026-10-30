@@ -5,6 +5,7 @@ struct LoopbackRequest {
     let path: String
     let command: WidgetCommand?
     let documentID: String?
+    let videoID: String?
 
     init?(_ raw: String) {
         guard raw.utf8.count <= 8192, raw.contains("\r\n\r\n") else { return nil }
@@ -27,6 +28,10 @@ struct LoopbackRequest {
         let ids = (components.queryItems ?? []).filter { $0.name == "document" }
         guard ids.count <= 1 else { return nil }
         documentID = ids.first?.value
+        let videos = (components.queryItems ?? []).filter { $0.name == "video" }
+        guard videos.count <= 1 else { return nil }
+        videoID = videos.first?.value
+        if let videoID, videoID.range(of: "^[A-Za-z0-9_-]{11}$", options: .regularExpression) == nil { return nil }
         if let documentID, UUID(uuidString: documentID) == nil { return nil }
         if path.hasPrefix("/cmd/") {
             guard parts[0] == "POST", let parsed = WidgetCommand(rawValue: String(path.dropFirst(5))) else { return nil }

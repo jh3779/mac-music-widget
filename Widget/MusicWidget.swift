@@ -21,8 +21,8 @@ enum HostClient {
         return (try? decoder.decode(NowPlaying.self, from: data)) ?? .empty
     }
 
-    static func send(_ command: WidgetCommand, documentID: String? = nil) async {
-        var request = URLRequest(url: Loopback.commandURL(command, documentID: documentID))
+    static func send(_ command: WidgetCommand, documentID: String? = nil, videoID: String? = nil) async {
+        var request = URLRequest(url: Loopback.commandURL(command, documentID: documentID, videoID: videoID))
         request.httpMethod = "POST"
         request.timeoutInterval = 1.5
         _ = try? await URLSession.shared.data(for: request)
@@ -33,33 +33,36 @@ enum HostClient {
 
 struct PlayPauseIntent: AppIntent {
     @Parameter(title: "Safari document") var documentID: String?
+    @Parameter(title: "Safari video") var videoID: String?
     init() {}
-    init(documentID: String?) { self.documentID = documentID }
+    init(documentID: String?, videoID: String?) { self.documentID = documentID; self.videoID = videoID }
     static var title: LocalizedStringResource = "Play or Pause"
     func perform() async throws -> some IntentResult {
-        await HostClient.send(.playPause, documentID: documentID)
+        await HostClient.send(.playPause, documentID: documentID, videoID: videoID)
         return .result()
     }
 }
 
 struct NextTrackIntent: AppIntent {
     @Parameter(title: "Safari document") var documentID: String?
+    @Parameter(title: "Safari video") var videoID: String?
     init() {}
-    init(documentID: String?) { self.documentID = documentID }
+    init(documentID: String?, videoID: String?) { self.documentID = documentID; self.videoID = videoID }
     static var title: LocalizedStringResource = "Next Track"
     func perform() async throws -> some IntentResult {
-        await HostClient.send(.next, documentID: documentID)
+        await HostClient.send(.next, documentID: documentID, videoID: videoID)
         return .result()
     }
 }
 
 struct PreviousTrackIntent: AppIntent {
     @Parameter(title: "Safari document") var documentID: String?
+    @Parameter(title: "Safari video") var videoID: String?
     init() {}
-    init(documentID: String?) { self.documentID = documentID }
+    init(documentID: String?, videoID: String?) { self.documentID = documentID; self.videoID = videoID }
     static var title: LocalizedStringResource = "Previous Track"
     func perform() async throws -> some IntentResult {
-        await HostClient.send(.previous, documentID: documentID)
+        await HostClient.send(.previous, documentID: documentID, videoID: videoID)
         return .result()
     }
 }
@@ -179,13 +182,13 @@ struct MusicWidgetView: View {
                 .lineLimit(1)
             Spacer(minLength: 0)
             HStack(spacing: 10) {
-                Button(intent: PreviousTrackIntent(documentID: state.webDocumentID)) { Image(systemName: "backward.fill") }
+                Button(intent: PreviousTrackIntent(documentID: state.webDocumentID, videoID: state.webVideoID)) { Image(systemName: "backward.fill") }
                     .disabled(state.canGoPrevious == false)
                     .accessibilityLabel("Previous")
-                Button(intent: PlayPauseIntent(documentID: state.webDocumentID)) {
+                Button(intent: PlayPauseIntent(documentID: state.webDocumentID, videoID: state.webVideoID)) {
                     Image(systemName: state.isPlaying ? "pause.fill" : "play.fill")
                 }
-                Button(intent: NextTrackIntent(documentID: state.webDocumentID)) { Image(systemName: "forward.fill") }
+                Button(intent: NextTrackIntent(documentID: state.webDocumentID, videoID: state.webVideoID)) { Image(systemName: "forward.fill") }
                     .disabled(state.canGoNext == false)
                     .accessibilityLabel("Next")
             }
@@ -220,14 +223,14 @@ struct MusicWidgetView: View {
                 Spacer(minLength: 2)
 
                 HStack(spacing: 16) {
-                    Button(intent: PreviousTrackIntent(documentID: state.webDocumentID)) { Image(systemName: "backward.fill") }
+                    Button(intent: PreviousTrackIntent(documentID: state.webDocumentID, videoID: state.webVideoID)) { Image(systemName: "backward.fill") }
                     .disabled(state.canGoPrevious == false)
                     .accessibilityLabel("Previous")
-                    Button(intent: PlayPauseIntent(documentID: state.webDocumentID)) {
+                    Button(intent: PlayPauseIntent(documentID: state.webDocumentID, videoID: state.webVideoID)) {
                         Image(systemName: state.isPlaying ? "pause.fill" : "play.fill")
                             .font(.system(size: 17, weight: .semibold))
                     }
-                    Button(intent: NextTrackIntent(documentID: state.webDocumentID)) { Image(systemName: "forward.fill") }
+                    Button(intent: NextTrackIntent(documentID: state.webDocumentID, videoID: state.webVideoID)) { Image(systemName: "forward.fill") }
                     .disabled(state.canGoNext == false)
                     .accessibilityLabel("Next")
 
@@ -245,7 +248,7 @@ struct MusicWidgetView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// Tapping cycles Auto -> YouTube Music -> Spotify -> Apple Music. A widget button can only
+    /// Tapping cycles Auto -> Safari YouTube -> YouTube Music -> Spotify -> Apple Music. A widget button can only
     /// fire an intent, so cycling is the only in-widget picker available.
     private var sourceButton: some View {
         Button(intent: CycleSourceIntent()) {

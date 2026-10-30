@@ -52,7 +52,8 @@
   browser.runtime.onMessage.addListener(async message => {
     const command = message?.command;
     if (message?.kind !== 'command' || !command || command.documentID !== documentID ||
-        command.videoID !== MediaMetadata.videoID(location.href) || command.id === lastCommandID) return { ok: false };
+        command.videoID !== MediaMetadata.videoID(location.href) || command.id === lastCommandID ||
+        !Number.isFinite(command.expiresAt) || Date.now() / 1000 >= command.expiresAt) return { ok: false };
     const snapshot = read();
     if (!snapshot) return { ok: false };
     lastCommandID = command.id;

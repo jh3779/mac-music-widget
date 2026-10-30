@@ -48,8 +48,8 @@ final class HostDelegate: NSObject, NSApplicationDelegate {
 
         server.provideState = { [weak self] in DispatchQueue.main.sync { self?.encodedState() ?? Data("{}".utf8) } }
         server.provideArtwork = { [weak self] in DispatchQueue.main.sync { self?.artworkData } }
-        server.handleCommand = { [weak self] command, documentID in
-            DispatchQueue.main.async { self?.run(command, documentID: documentID) }
+        server.handleCommand = { [weak self] command, documentID, videoID in
+            DispatchQueue.main.async { self?.run(command, documentID: documentID, videoID: videoID) }
         }
         server.start()
 
@@ -120,6 +120,7 @@ final class HostDelegate: NSObject, NSApplicationDelegate {
         track.artworkURL = snapshot.artworkURL
         track.isPlaying = snapshot.isPlaying
         track.available = true
+        track.webVideoID = snapshot.videoID
         track.webDocumentID = snapshot.documentID
         track.validUntil = snapshot.expiresAt
         track.canGoNext = snapshot.canGoNext
@@ -210,6 +211,7 @@ final class HostDelegate: NSObject, NSApplicationDelegate {
         next.isPlaying = track.isPlaying
         next.elapsed = track.elapsed
         next.duration = track.duration
+        next.webVideoID = track.webVideoID
         next.webDocumentID = track.webDocumentID
         next.validUntil = track.validUntil
         next.canGoNext = track.canGoNext
@@ -245,11 +247,11 @@ final class HostDelegate: NSObject, NSApplicationDelegate {
 
     /// Commands go to whichever source is currently on screen, so the buttons always control
     /// what the widget is actually showing.
-    private func run(_ command: WidgetCommand, documentID: String?) {
+    private func run(_ command: WidgetCommand, documentID: String?, videoID: String?) {
         if command != .cycleSource {
             if resolvedKind == .safariYouTube {
-                guard let documentID, documentID == state.webDocumentID else { return }
-            } else if documentID != nil { return }
+                guard let documentID, let videoID, documentID == state.webDocumentID, videoID == state.webVideoID else { return }
+            } else if documentID != nil || videoID != nil { return }
         }
         interactionExpires = Date().addingTimeInterval(8)
         lastInteraction = Date()

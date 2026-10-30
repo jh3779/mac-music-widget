@@ -22,6 +22,7 @@ struct NowPlaying: Codable, Equatable {
     var validUntil: Date? = nil
 
     var webDocumentID: String? = nil
+    var webVideoID: String? = nil
     var canGoNext: Bool? = nil
     var canGoPrevious: Bool? = nil
 
@@ -78,9 +79,10 @@ enum WidgetCommand: String, Codable, CaseIterable {
 enum Loopback {
     static let port: UInt16 = 47893
     static var stateURL: URL { URL(string: "http://127.0.0.1:\(port)/state")! }
-    static func commandURL(_ command: WidgetCommand, documentID: String? = nil) -> URL {
+    static func commandURL(_ command: WidgetCommand, documentID: String? = nil, videoID: String? = nil) -> URL {
         var url = URLComponents(string: "http://127.0.0.1:\(port)/cmd/\(command.rawValue)")!
         if let documentID { url.queryItems = [URLQueryItem(name: "document", value: documentID)] }
+        if let videoID { url.queryItems = (url.queryItems ?? []) + [URLQueryItem(name: "video", value: videoID)] }
         return url.url!
     }
 }

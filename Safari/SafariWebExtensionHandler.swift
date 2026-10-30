@@ -29,9 +29,10 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 case "snapshot":
                     let snapshot = try WebMediaSnapshot.decode(message)
                     try store.save(snapshot, profile: profile)
-                    if let command = store.takeCommand(for: snapshot),
-                       let json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(command)) as? [String: Any] {
-                        response["command"] = json
+                    if let command = store.takeCommand(for: snapshot) {
+                        let encoder = JSONEncoder()
+                        encoder.dateEncodingStrategy = .secondsSince1970
+                        response["command"] = try JSONSerialization.jsonObject(with: encoder.encode(command))
                     }
                 default: throw WebMediaError.invalidMessage
                 }

@@ -15,7 +15,7 @@ final class HTTPServer {
     /// Cover art bytes for sources that hand over data instead of a URL (Apple Music).
     var provideArtwork: (() -> Data?)?
     /// Handles a command and returns once it has been dispatched.
-    var handleCommand: ((WidgetCommand, String?) -> Void)?
+    var handleCommand: ((WidgetCommand, String?, String?) -> Void)?
 
     func start() {
         let params = NWParameters.tcp
@@ -66,7 +66,7 @@ final class HTTPServer {
             return Self.ok(body: art, contentType: "image/png")
         }
         if let command = request.command {
-            handleCommand?(command, request.documentID)
+            handleCommand?(command, request.documentID, request.videoID)
             return Self.ok(body: Data("{\"ok\":true}".utf8), contentType: "application/json")
         }
         return Self.notFound
