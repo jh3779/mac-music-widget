@@ -68,6 +68,7 @@ There was no external plan file. Tests were derived from the user journeys above
 | Widget display RED | `e4f1f3b` | User-reproduced blank display regression; tests could not find the new `WidgetDisplaySnapshot` policy. |
 | Widget display GREEN | `529a1ab` | Thirteen Swift tests passed; signed 1.2.1 built and installed with a refresh control. |
 | Page adapter RED | `a933305` | Two JS tests failed: native `MediaMetadata` was overwritten, and an unrelated unready video hid Music metadata. |
+| Page adapter GREEN | `8d0c782` | Fifteen JS and thirteen Swift tests pass; signed 1.2.2 installed, user confirmed title/artwork, and actual Music pause/resume transport passed. |
 
 These checkpoints remain reachable on `feat/safari-youtube-notification-widget`. Preserve this table in any later squash so the RED/GREEN evidence remains reviewable.
 
