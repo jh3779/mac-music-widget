@@ -28,6 +28,7 @@ final class HostDelegate: NSObject, NSApplicationDelegate {
     private var reloadGate = WidgetReloadGate()
     private var pollGeneration = 0
     private var youtubePollInFlight = false
+    private var interactionExpires = Date.distantPast
     private var displayedSafari: WebMediaSnapshot?
     private var timer: Timer?
 
@@ -47,8 +48,8 @@ final class HostDelegate: NSObject, NSApplicationDelegate {
 
         server.provideState = { [weak self] in DispatchQueue.main.sync { self?.encodedState() ?? Data("{}".utf8) } }
         server.provideArtwork = { [weak self] in DispatchQueue.main.sync { self?.artworkData } }
-        server.handleCommand = { [weak self] command in
-            DispatchQueue.main.async { self?.run(command) }
+        server.handleCommand = { [weak self] command, documentID in
+            DispatchQueue.main.async { self?.run(command, documentID: documentID) }
         }
         server.start()
 
@@ -64,6 +65,7 @@ final class HostDelegate: NSObject, NSApplicationDelegate {
     // MARK: Polling
 
     private func poll() {
+        if youtubePollInFlight && (sourceKind == .auto || sourceKind == .youtubeMusic) { return }
         pollGeneration += 1
         switch sourceKind {
         case .safariYouTube:
@@ -118,6 +120,7 @@ final class HostDelegate: NSObject, NSApplicationDelegate {
         track.artworkURL = snapshot.artworkURL
         track.isPlaying = snapshot.isPlaying
         track.available = true
+        track.webDocumentID = snapshot.documentID
         track.validUntil = snapshot.expiresAt
         track.canGoNext = snapshot.canGoNext
         track.canGoPrevious = snapshot.canGoPrevious
@@ -207,6 +210,7 @@ final class HostDelegate: NSObject, NSApplicationDelegate {
         next.isPlaying = track.isPlaying
         next.elapsed = track.elapsed
         next.duration = track.duration
+        next.webDocumentID = track.webDocumentID
         next.validUntil = track.validUntil
         next.canGoNext = track.canGoNext
         next.canGoPrevious = track.canGoPrevious
@@ -217,8 +221,10 @@ final class HostDelegate: NSObject, NSApplicationDelegate {
         next.sourceActive = kind.rawValue
         next.showSourceButton = Date().timeIntervalSince(lastInteraction) < Self.revealWindow
 
+        let interactiveChange = Date() < interactionExpires &&
+            (next.title != state.title || next.isPlaying != state.isPlaying || next.sourceSelection != state.sourceSelection)
         state = next
-        publishIfChanged(next)
+        publishIfChanged(next, force: interactiveChange)
         refreshMenuChecks()
     }
 
@@ -230,8 +236,8 @@ final class HostDelegate: NSObject, NSApplicationDelegate {
 
     /// Widget reloads are a limited resource, so only ask for one when something a viewer would
     /// notice actually changed — not on every poll tick.
-    private func publishIfChanged(_ next: NowPlaying) {
-        guard reloadGate.shouldReload(next) else { return }
+    private func publishIfChanged(_ next: NowPlaying, force: Bool = false) {
+        guard reloadGate.shouldReload(next, force: force) else { return }
         WidgetCenter.shared.reloadTimelines(ofKind: "MacMusicWidget")
     }
 
@@ -239,7 +245,13 @@ final class HostDelegate: NSObject, NSApplicationDelegate {
 
     /// Commands go to whichever source is currently on screen, so the buttons always control
     /// what the widget is actually showing.
-    private func run(_ command: WidgetCommand) {
+    private func run(_ command: WidgetCommand, documentID: String?) {
+        if command != .cycleSource {
+            if resolvedKind == .safariYouTube {
+                guard let documentID, documentID == state.webDocumentID else { return }
+            } else if documentID != nil { return }
+        }
+        interactionExpires = Date().addingTimeInterval(8)
         lastInteraction = Date()
         // Publish again once the reveal window lapses, so the switcher actually disappears
         // rather than lingering until the next unrelated state change.
@@ -364,12 +376,15 @@ final class HostDelegate: NSObject, NSApplicationDelegate {
         guard picked != sourceKind else { return }
         pauseCurrentSource()
         sourceKind = picked
+        pollGeneration += 1
+        interactionExpires = Date().addingTimeInterval(8)
         poll()
     }
 
     @objc private func selectBrowser(_ sender: NSMenuItem) {
         guard let raw = sender.representedObject as? String, let picked = Browser(rawValue: raw) else { return }
         browser = picked
+        pollGeneration += 1
         UserDefaults.standard.set(picked.rawValue, forKey: "browser")
         poll()
     }

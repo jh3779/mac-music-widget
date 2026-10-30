@@ -21,7 +21,7 @@ struct NowPlaying: Codable, Equatable {
     /// Safari evidence expires when permission, tab, browser, or native messaging disappears.
     var validUntil: Date? = nil
 
-    var supportsTransport: Bool { true }
+    var webDocumentID: String? = nil
     var canGoNext: Bool? = nil
     var canGoPrevious: Bool? = nil
 
@@ -78,7 +78,9 @@ enum WidgetCommand: String, Codable, CaseIterable {
 enum Loopback {
     static let port: UInt16 = 47893
     static var stateURL: URL { URL(string: "http://127.0.0.1:\(port)/state")! }
-    static func commandURL(_ command: WidgetCommand) -> URL {
-        URL(string: "http://127.0.0.1:\(port)/cmd/\(command.rawValue)")!
+    static func commandURL(_ command: WidgetCommand, documentID: String? = nil) -> URL {
+        var url = URLComponents(string: "http://127.0.0.1:\(port)/cmd/\(command.rawValue)")!
+        if let documentID { url.queryItems = [URLQueryItem(name: "document", value: documentID)] }
+        return url.url!
     }
 }

@@ -80,8 +80,6 @@ final class WebMediaTests: XCTestCase {
         var state = NowPlaying.empty
         state.sourceActive = "safariYouTube"
         XCTAssertEqual(state.sourceLabel, "Auto — Safari YouTube")
-        XCTAssertTrue(state.supportsTransport)
         state.sourceActive = "spotify"
-        XCTAssertTrue(state.supportsTransport)
     }
 }

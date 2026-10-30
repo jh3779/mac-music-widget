@@ -4,7 +4,22 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 # Captured up front: the retina-icon loop below reassigns the positional parameters.
-MODE="${1:-}"
+MODE=""
+SPEC="project.yml"
+BUILD_OPTIONS=("CODE_SIGNING_ALLOWED=YES")
+for option in "$@"; do
+  case "$option" in
+    --install) MODE="--install" ;;
+    --safari) SPEC="project-safari.yml" ;;
+    *) echo "Usage: $0 [--safari] [--install]" >&2; exit 2 ;;
+  esac
+done
+if [[ "$SPEC" == "project-safari.yml" ]]; then
+  : "${DEVELOPMENT_TEAM:?Set DEVELOPMENT_TEAM to your Apple signing team for the Safari build.}"
+  : "${APP_GROUP_IDENTIFIER:?Set APP_GROUP_IDENTIFIER to your provisioned App Group.}"
+  : "${BUNDLE_ID_PREFIX:?Set BUNDLE_ID_PREFIX to your own unique reverse-DNS app identifier.}"
+  BUILD_OPTIONS+=("DEVELOPMENT_TEAM=$DEVELOPMENT_TEAM" "APP_GROUP_IDENTIFIER=$APP_GROUP_IDENTIFIER" "BUNDLE_ID_PREFIX=$BUNDLE_ID_PREFIX")
+fi
 
 APP_NAME="Mac Music Widget"
 SOURCE_SVG="Resources/AppIcon.svg"
@@ -39,11 +54,15 @@ fi
 
 # --- build ------------------------------------------------------------------
 echo "==> Generating Xcode project"
-xcodegen generate >/dev/null
+xcodegen generate --spec "$SPEC" >/dev/null
 
 echo "==> Building"
-xcodebuild -project MacMusicWidget.xcodeproj -scheme MacMusicWidgetHost \
-  -configuration Release -derivedDataPath .build build 2>&1 | grep -E "error:|\*\* BUILD" || true
+mkdir -p .build
+if ! xcodebuild -project MacMusicWidget.xcodeproj -scheme MacMusicWidgetHost \
+  -configuration Release -derivedDataPath .build "${BUILD_OPTIONS[@]}" build > .build/build.log 2>&1; then
+  tail -80 .build/build.log >&2
+  exit 1
+fi
 
 BUILT=".build/Build/Products/Release/$APP_NAME.app"
 [ -d "$BUILT" ] || { echo "Build produced no app at $BUILT"; exit 1; }

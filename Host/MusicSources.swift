@@ -13,6 +13,7 @@ struct SourceTrack {
     var available = false
     var note = ""
     /// Raw cover art, for sources that hand over bytes instead of a URL (Apple Music).
+    var webDocumentID: String?
     var validUntil: Date?
     var canGoNext: Bool?
     var canGoPrevious: Bool?

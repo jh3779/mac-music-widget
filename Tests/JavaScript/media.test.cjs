@@ -24,3 +24,15 @@ test('snapshot carries bounded metadata and real play/pause state', () => {
   assert.equal(m.snapshot({ ...input, readyState: 0 }), null);
   assert.equal(m.snapshot({ ...input, title: 'x'.repeat(900) }).title.length, 512);
 });
+test('Instagram posts, reels, embeds and subdomains are explicitly excluded', () => {
+  const m = api();
+  for (const url of [
+    'https://www.instagram.com/reel/ABC123/', 'https://instagram.com/p/ABC123/',
+    'https://www.instagram.com/p/ABC123/embed/', 'https://m.instagram.com/reels/',
+    'https://www.instagram.com/watch?v=dQw4w9WgXcQ'
+  ]) assert.equal(m.videoID(url), null);
+  const manifest = JSON.parse(fs.readFileSync('Safari/Resources/manifest.json', 'utf8'));
+  assert.deepEqual(manifest.content_scripts[0].matches, ['https://www.youtube.com/*']);
+  assert.equal(manifest.content_scripts[0].all_frames, false);
+  assert.ok(!manifest.permissions.some(value => value.includes('instagram') || value === '<all_urls>'));
+});
