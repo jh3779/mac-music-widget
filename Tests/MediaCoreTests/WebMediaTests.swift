@@ -82,4 +82,16 @@ final class WebMediaTests: XCTestCase {
         XCTAssertEqual(state.sourceLabel, "Auto — Safari YouTube")
         state.sourceActive = "spotify"
     }
+    func testMusicSnapshotAcceptsOpaqueIdentityAndRejectsUntrustedArtwork() throws {
+        var message: [String: Any] = ["version": 1, "tabID": 1, "source": "youtubeMusic",
+            "videoID": "1B6341CD-1052-41CC-A8A5-F3AA4B9E2D88", "documentID": "7A6341CD-1052-41CC-A8A5-F3AA4B9E2D88",
+            "title": "Song", "author": "Artist", "isPlaying": true, "canGoNext": true, "canGoPrevious": true,
+            "artworkURL": "https://lh3.googleusercontent.com/cover=w544-h544"]
+        let music = try WebMediaSnapshot.decode(message, now: now)
+        XCTAssertEqual(music.source, "youtubeMusic")
+        XCTAssertEqual(music.artworkURL, message["artworkURL"] as? String)
+        message["artworkURL"] = "https://evilgoogleusercontent.com/cover"
+        XCTAssertThrowsError(try WebMediaSnapshot.decode(message, now: now))
+    }
+
 }

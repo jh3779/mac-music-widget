@@ -36,3 +36,18 @@ test('Instagram posts, reels, embeds and subdomains are explicitly excluded', ()
   assert.equal(manifest.content_scripts[0].all_frames, false);
   assert.ok(!manifest.permissions.some(value => value.includes('instagram') || value === '<all_urls>'));
 });
+test('YouTube Music metadata works without a watch URL and only accepts Google artwork', () => {
+  const m = api();
+  const input = { url: 'https://music.youtube.com/', title: 'Song', author: 'Artist • Album', artworkURL: 'https://lh3.googleusercontent.com/example=w60-h60', paused: false, ended: false, readyState: 4, ad: false, canGoNext: true };
+  const found = m.musicSnapshot(input);
+  assert.equal(found.source, 'youtubeMusic');
+  assert.equal(found.title, 'Song');
+  assert.equal(found.author, 'Artist');
+  assert.equal(found.isPlaying, true);
+  assert.match(found.artworkURL, /w544/);
+  assert.equal(m.musicSnapshot({ ...input, ad: true }), null);
+  assert.equal(m.musicSnapshot({ ...input, url: 'https://www.instagram.com/' }), null);
+  for (const artworkURL of ['http://lh3.googleusercontent.com/a', 'https://evilgoogleusercontent.com/a', 'https://instagram.com/a']) {
+    assert.equal(m.musicSnapshot({ ...input, artworkURL }).artworkURL, '');
+  }
+});
