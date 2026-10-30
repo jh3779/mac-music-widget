@@ -46,7 +46,8 @@ test('native commands route to the reporting tab; close and navigation clear met
 function content(music = false) {
   let listener, heartbeat;
   const events = {}, sent = [];
-  const video = { paused: true, ended: false, readyState: 4, async play() { this.paused = false; }, pause() { this.paused = true; } };
+  let video = { currentSrc: 'blob:https://music.youtube.com/resource-A', paused: true, ended: false, readyState: 4, async play() { this.paused = false; }, pause() { this.paused = true; } };
+  let playerAvailable = true;
   const next = { disabled: false, getAttribute() { return null; }, getClientRects() { return [1]; }, clicks: 0, click() { this.clicks++; } };
   const previous = { ...next, getClientRects() { return []; } };
   const player = { classList: { contains() { return false; } }, querySelector(selector) { return { video, '.ytp-next-button': next, '.ytp-prev-button': previous }[selector]; } };
@@ -54,19 +55,98 @@ function content(music = false) {
   const title = { textContent: 'Song' };
   const bar = { querySelector(selector) { return { '.title': title, '.byline': { textContent: 'Artist • Album' }, img: { src: 'https://lh3.googleusercontent.com/cover=w60-h60' }, '.next-button': next, '.previous-button': previous }[selector]; } };
   const location = { href: music ? 'https://music.youtube.com/' : url };
-  const unrelatedVideo = { readyState: 0, paused: true };
+  const unrelatedVideo = { readyState: 4, paused: false };
   let uuid = 0;
   const ctx = vm.createContext({ URL, Date, location, crypto: { randomUUID: () => uuid++ === 0 ? documentID : `00000000-0000-4000-8000-${String(uuid).padStart(12, '0')}` },
     setTimeout(fn) { return 1; }, setInterval(fn) { heartbeat = fn; },
     MutationObserver: class { observe() {} },
     window: { addEventListener(name, fn) { events[name] = fn; } },
-    document: { documentElement: {}, querySelector(selector) { return { 'ytd-watch-flexy': page, '#movie_player': player, 'ytmusic-player-bar': bar, video: music ? unrelatedVideo : video }[selector]; }, addEventListener(name, fn) { events[name] = fn; } },
+    document: { documentElement: {}, querySelector(selector) { return { 'ytd-watch-flexy': page, '#movie_player': playerAvailable ? player : null, 'ytmusic-player-bar': bar, video: music ? unrelatedVideo : video }[selector]; }, addEventListener(name, fn) { events[name] = fn; } },
     browser: { runtime: { async sendMessage(value) { sent.push(value); return { ok: true }; }, onMessage: { addListener(fn) { listener = fn; } } } }
   });
   load('media', ctx); load('content', ctx);
   const command = (action, overrides = {}) => listener({ kind: 'command', command: { id: Math.random().toString(), action, videoID: sent[0].snapshot.videoID, documentID, expiresAt: Date.now() / 1000 + 8, ...overrides } });
-  return { command, video, next, previous, title, events, sent, location, heartbeat: () => heartbeat() };
+  return { command, get video() { return video; }, next, previous, title, events, sent, location, unrelatedVideo,
+    replaceVideo(value) { video = value; }, setPlayerAvailable(value) { playerAvailable = value; },
+    mediaEvent(type, target = video) { events[type]({ type, target }); }, heartbeat: () => heartbeat() };
 }
+test('Music rejects the previous song target when its resource changes before the title', async () => {
+  const c = content(true);
+  const before = c.sent[0].snapshot;
+  c.video.paused = false;
+  c.video.currentSrc = 'blob:https://music.youtube.com/resource-B';
+  assert.equal((await c.command('pause')).ok, false);
+  assert.equal(c.video.paused, false);
+  c.heartbeat();
+  const changedResource = c.sent.at(-1).snapshot;
+  assert.equal(changedResource.title, before.title);
+  assert.notEqual(changedResource.videoID, before.videoID);
+  c.title.textContent = 'Song B';
+  assert.equal((await c.command('pause', { videoID: changedResource.videoID })).ok, false);
+  c.heartbeat();
+  assert.equal((await c.command('pause', { videoID: c.sent.at(-1).snapshot.videoID })).ok, true);
+});
+test('Music rejects the old target if the video element is replaced with the same URL', async () => {
+  const c = content(true);
+  const before = c.sent[0].snapshot;
+  c.replaceVideo({ ...c.video, paused: false });
+  assert.equal((await c.command('pause')).ok, false);
+  assert.equal(c.video.paused, false);
+  c.heartbeat();
+  const replacement = c.sent.at(-1).snapshot;
+  assert.notEqual(replacement.videoID, before.videoID);
+  assert.equal((await c.command('pause', { videoID: replacement.videoID })).ok, true);
+});
+test('Music invalidates a reused Blob across emptied/loadedmetadata but keeps the new target stable', async () => {
+  const c = content(true);
+  const before = c.sent[0].snapshot;
+  c.video.paused = false;
+  c.video.readyState = 0;
+  c.mediaEvent('emptied');
+  assert.equal((await c.command('pause')).ok, false);
+  c.video.readyState = 4;
+  c.mediaEvent('loadedmetadata');
+  c.heartbeat();
+  const reloaded = c.sent.at(-1).snapshot;
+  assert.notEqual(reloaded.videoID, before.videoID);
+  assert.equal((await c.command('pause')).ok, false);
+  for (const type of ['play', 'pause', 'play']) {
+    c.mediaEvent(type);
+    assert.equal((await c.command('playPause', { videoID: reloaded.videoID })).ok, true);
+    c.heartbeat();
+    assert.equal(c.sent.at(-1).snapshot.videoID, reloaded.videoID);
+  }
+});
+test('Music never falls back to an unrelated ready video when the player is absent', async () => {
+  const c = content(true);
+  c.setPlayerAvailable(false);
+  c.heartbeat();
+  assert.equal(c.sent.at(-1).snapshot, null);
+  assert.equal((await c.command('pause')).ok, false);
+  assert.equal(c.unrelatedVideo.paused, false);
+});
+test('unrelated media events do not invalidate the Music player target', async () => {
+  const c = content(true);
+  const before = c.sent[0].snapshot;
+  c.mediaEvent('emptied', c.unrelatedVideo);
+  c.mediaEvent('loadedmetadata', c.unrelatedVideo);
+  c.heartbeat();
+  assert.equal(c.sent.at(-1).snapshot.videoID, before.videoID);
+  assert.equal((await c.command('playPause')).ok, true);
+  assert.equal(c.unrelatedVideo.paused, false);
+});
+test('Music page navigation keeps the same playing media target', async () => {
+  const c = content(true);
+  const before = c.sent[0].snapshot;
+  c.video.paused = false;
+  c.location.href = 'https://music.youtube.com/search?q=another-page';
+  c.events['yt-navigate-start']();
+  assert.equal(c.sent.at(-1).snapshot.videoID, before.videoID);
+  assert.equal((await c.command('pause')).ok, true);
+  c.events['yt-navigate-finish']();
+  c.heartbeat();
+  assert.equal(c.sent.at(-1).snapshot.videoID, before.videoID);
+});
 test('YouTube Music publishes without a watch URL, routes controls and rejects an old song target', async () => {
   const c = content(true);
   const snapshot = c.sent[0].snapshot;
