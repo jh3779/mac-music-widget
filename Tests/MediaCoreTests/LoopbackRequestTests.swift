@@ -12,9 +12,10 @@ final class LoopbackRequestTests: XCTestCase {
     }
     func testDocumentTargetIsValidatedAndPreserved() {
         let id = "7A6341CD-1052-41CC-A8A5-F3AA4B9E2D88"
-        let request = LoopbackRequest("POST /cmd/next?document=\(id) HTTP/1.1\r\nHost: 127.0.0.1:47893\r\n\r\n")
+        let request = LoopbackRequest("POST /cmd/next?document=\(id)&video=dQw4w9WgXcQ HTTP/1.1\r\nHost: 127.0.0.1:47893\r\n\r\n")
         XCTAssertEqual(request?.documentID, id)
         XCTAssertEqual(request?.command, .next)
+        XCTAssertEqual(request?.videoID, "dQw4w9WgXcQ")
         XCTAssertNil(LoopbackRequest("POST /cmd/next?document=../../bad HTTP/1.1\r\nHost: 127.0.0.1:47893\r\n\r\n"))
     }
 }

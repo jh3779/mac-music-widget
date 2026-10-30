@@ -2,10 +2,11 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
+const path = require('node:path');
 const documentID = '7A6341CD-1052-41CC-A8A5-F3AA4B9E2D88';
 const url = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
 const metadata = { videoID: 'dQw4w9WgXcQ', title: 'Video', author: 'Channel', isPlaying: true, documentID, canGoNext: true, canGoPrevious: false };
-const load = (name, ctx) => vm.runInContext(fs.readFileSync(`Safari/Resources/${name}.js`, 'utf8'), ctx, { filename: name + '.js' });
+const load = (name, ctx) => vm.runInContext(fs.readFileSync(`Safari/Resources/${name}.js`, 'utf8'), ctx, { filename: path.resolve('Safari/Resources/' + name + '.js') });
 function background() {
   const calls = [], deliveries = [];
   let message, removed, updated, nativeResponse = { ok: true };
@@ -59,7 +60,7 @@ function content() {
     browser: { runtime: { async sendMessage(value) { sent.push(value); return { ok: true }; }, onMessage: { addListener(fn) { listener = fn; } } } }
   });
   load('media', ctx); load('content', ctx);
-  const command = (action, overrides = {}) => listener({ kind: 'command', command: { id: Math.random().toString(), action, videoID: metadata.videoID, documentID, ...overrides } });
+  const command = (action, overrides = {}) => listener({ kind: 'command', command: { id: Math.random().toString(), action, videoID: metadata.videoID, documentID, expiresAt: Date.now() / 1000 + 8, ...overrides } });
   return { command, video, next, previous, events, sent, location, heartbeat: () => heartbeat() };
 }
 test('content publishes a thumbnail identity without embedding or fetching video', () => {
@@ -95,4 +96,21 @@ test('Safari autoplay rejection returns failure instead of pretending playback s
   const c = content(); c.video.play = async () => { throw new Error('NotAllowedError'); };
   assert.equal((await c.command('playPause')).ok, false);
   assert.equal(c.video.paused, true);
+});
+
+test('commands that expire while the Safari page is suspended are rejected', async () => {
+  const c = content();
+  assert.equal((await c.command('playPause', { expiresAt: Date.now() / 1000 - 1 })).ok, false);
+  assert.equal(c.video.paused, true);
+});
+test('popup reports native bridge success, error and connection failure', async () => {
+  for (const outcome of [{ ok: true }, { ok: false, error: 'Group unavailable' }, new Error('Disconnected')]) {
+    const status = { textContent: '' };
+    const ctx = vm.createContext({ document: { getElementById() { return status; } }, browser: { runtime: {
+      async sendMessage() { if (outcome instanceof Error) throw outcome; return outcome; }
+    } } });
+    load('popup', ctx);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.match(status.textContent, outcome.ok ? /ready/ : outcome instanceof Error ? /unavailable/ : /Group unavailable/);
+  }
 });
