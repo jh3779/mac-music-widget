@@ -13,15 +13,21 @@ struct SourceTrack {
     var available = false
     var note = ""
     /// Raw cover art, for sources that hand over bytes instead of a URL (Apple Music).
+    var webVideoID: String?
+    var webDocumentID: String?
+    var validUntil: Date?
+    var canGoNext: Bool?
+    var canGoPrevious: Bool?
     var artworkData: Data?
 }
 
 enum MusicSourceKind: String, CaseIterable {
-    case auto, youtubeMusic, spotify, appleMusic
+    case auto, safariYouTube, youtubeMusic, spotify, appleMusic
 
     var displayName: String {
         switch self {
         case .auto: return "Auto"
+        case .safariYouTube: return "Safari YouTube"
         case .youtubeMusic: return "YouTube Music"
         case .spotify: return "Spotify"
         case .appleMusic: return "Apple Music"

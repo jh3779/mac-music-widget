@@ -15,7 +15,7 @@ final class HTTPServer {
     /// Cover art bytes for sources that hand over data instead of a URL (Apple Music).
     var provideArtwork: (() -> Data?)?
     /// Handles a command and returns once it has been dispatched.
-    var handleCommand: ((WidgetCommand) -> Void)?
+    var handleCommand: ((WidgetCommand, String?, String?) -> Void)?
 
     func start() {
         let params = NWParameters.tcp
@@ -38,38 +38,35 @@ final class HTTPServer {
 
     private func accept(_ connection: NWConnection) {
         connection.start(queue: queue)
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 8192) { [weak self] data, _, _, _ in
-            guard let self, let data, let request = String(data: data, encoding: .utf8) else {
-                connection.cancel()
+        receiveHeaders(connection, accumulated: Data())
+    }
+
+    private func receiveHeaders(_ connection: NWConnection, accumulated: Data) {
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 8192) { [weak self] data, _, complete, error in
+            guard let self, let data, error == nil else { connection.cancel(); return }
+            let bytes = accumulated + data
+            guard bytes.count <= 8192 else { connection.cancel(); return }
+            guard let raw = String(data: bytes, encoding: .utf8), raw.contains("\r\n\r\n") else {
+                if complete { connection.cancel() }
+                else { self.receiveHeaders(connection, accumulated: bytes) }
                 return
             }
-            let response = self.respond(to: request)
-            connection.send(content: response, completion: .contentProcessed { _ in
-                connection.cancel()
-            })
+            let response = self.respond(to: raw)
+            connection.send(content: response, completion: .contentProcessed { _ in connection.cancel() })
         }
     }
 
-    private func respond(to request: String) -> Data {
-        // Only the request line matters here; there are exactly two routes.
-        guard let line = request.split(separator: "\r\n").first else { return Self.notFound }
-        let parts = line.split(separator: " ")
-        guard parts.count >= 2 else { return Self.notFound }
-        let path = String(parts[1])
-
-        if path == "/state" {
-            let body = provideState?() ?? Data("{}".utf8)
-            return Self.ok(body: body, contentType: "application/json")
+    private func respond(to raw: String) -> Data {
+        guard let request = LoopbackRequest(raw) else { return Self.notFound }
+        if request.path == "/state" {
+            return Self.ok(body: provideState?() ?? Data("{}".utf8), contentType: "application/json")
         }
-        // The query string is a per-track cache-buster; the path alone identifies the route.
-        if path == "/artwork" || path.hasPrefix("/artwork?") {
+        if request.path == "/artwork" {
             guard let art = provideArtwork?() else { return Self.notFound }
             return Self.ok(body: art, contentType: "image/png")
         }
-        if path.hasPrefix("/cmd/") {
-            let name = String(path.dropFirst("/cmd/".count))
-            guard let command = WidgetCommand(rawValue: name) else { return Self.notFound }
-            handleCommand?(command)
+        if let command = request.command {
+            handleCommand?(command, request.documentID, request.videoID)
             return Self.ok(body: Data("{\"ok\":true}".utf8), contentType: "application/json")
         }
         return Self.notFound

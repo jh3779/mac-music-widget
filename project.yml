@@ -1,6 +1,6 @@
 name: MacMusicWidget
 options:
-  bundleIdPrefix: com.ignasave.macmusicwidget
+  bundleIdPrefix: com.jh3779.macmusicwidget
   deploymentTarget:
     macOS: "14.0"
   createIntermediateGroups: true
@@ -10,8 +10,8 @@ settings:
     CODE_SIGNING_REQUIRED: "YES"
     CODE_SIGNING_ALLOWED: "YES"
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "1.0.0"
-    CURRENT_PROJECT_VERSION: "1"
+    MARKETING_VERSION: "1.2.3"
+    CURRENT_PROJECT_VERSION: "5"
     ENABLE_HARDENED_RUNTIME: "YES"
 targets:
   MacMusicWidgetHost:
@@ -19,12 +19,18 @@ targets:
     platform: macOS
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.ignasave.macmusicwidget
+        PRODUCT_BUNDLE_IDENTIFIER: com.jh3779.macmusicwidget
         PRODUCT_NAME: Mac Music Widget
-    sources: [Host, Shared]
+    sources:
+      - Host
+      - Shared
+      - path: LICENSE
+        buildPhase: resources
     info:
       path: Host/Info.plist
       properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleName: Mac Music Widget
         CFBundleDisplayName: Mac Music Widget
         CFBundleIconFile: AppIcon
@@ -56,11 +62,13 @@ targets:
     platform: macOS
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.ignasave.macmusicwidget.widget
+        PRODUCT_BUNDLE_IDENTIFIER: com.jh3779.macmusicwidget.widget
     sources: [Widget, Shared]
     info:
       path: Widget/Info.plist
       properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleDisplayName: Mac Music Widget
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
