@@ -12,10 +12,7 @@ struct WidgetReloadGate {
         current.elapsed = 0
         current.validUntil = nil
         let changed = lastState != current
-        // Safari's precomputed expiry entry must be renewed while it is still playing.
-        // This is only a request: WidgetKit may throttle it even after this interval.
-        let renewLease = next.validUntil != nil && now.timeIntervalSince(lastReload) >= minimumInterval
-        guard force || changed || renewLease else { return false }
+        guard force || changed else { return false }
         guard force || now.timeIntervalSince(lastReload) >= minimumInterval else { return false }
         lastState = current
         lastReload = now

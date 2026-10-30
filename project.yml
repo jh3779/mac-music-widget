@@ -10,8 +10,8 @@ settings:
     CODE_SIGNING_REQUIRED: "YES"
     CODE_SIGNING_ALLOWED: "YES"
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "1.2.0"
-    CURRENT_PROJECT_VERSION: "2"
+    MARKETING_VERSION: "1.2.1"
+    CURRENT_PROJECT_VERSION: "3"
     ENABLE_HARDENED_RUNTIME: "YES"
 targets:
   MacMusicWidgetHost:
@@ -21,7 +21,11 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.jh3779.macmusicwidget
         PRODUCT_NAME: Mac Music Widget
-    sources: [Host, Shared]
+    sources:
+      - Host
+      - Shared
+      - path: LICENSE
+        buildPhase: resources
     info:
       path: Host/Info.plist
       properties:

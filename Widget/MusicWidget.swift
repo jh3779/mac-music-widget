@@ -75,6 +75,14 @@ struct CycleSourceIntent: AppIntent {
     }
 }
 
+struct RefreshMediaIntent: AppIntent {
+    static var title: LocalizedStringResource = "Refresh Media"
+    func perform() async throws -> some IntentResult {
+        WidgetCenter.shared.reloadTimelines(ofKind: "MacMusicWidget")
+        return .result()
+    }
+}
+
 // MARK: - Timeline
 
 struct NowPlayingEntry: TimelineEntry {
@@ -83,6 +91,7 @@ struct NowPlayingEntry: TimelineEntry {
     /// Resolved before the entry is created. A widget renders once, so an image fetched
     /// asynchronously *inside* the view (via `.task`) would never appear.
     var artwork: Image? = nil
+    var isStale = false
 }
 
 struct Provider: TimelineProvider {
@@ -98,7 +107,9 @@ struct Provider: TimelineProvider {
     func getSnapshot(in context: Context, completion: @escaping (NowPlayingEntry) -> Void) {
         Task {
             let state = await HostClient.fetchState()
-            completion(NowPlayingEntry(date: Date(), state: state, artwork: await Self.artwork(state)))
+            let artwork = await Self.artwork(state)
+            let snapshot = WidgetDisplaySnapshot.timeline(for: state, now: Date())[0]
+            completion(NowPlayingEntry(date: snapshot.date, state: state, artwork: artwork, isStale: snapshot.isStale))
         }
     }
 
@@ -115,21 +126,12 @@ struct Provider: TimelineProvider {
     func getTimeline(in context: Context, completion: @escaping (Timeline<NowPlayingEntry>) -> Void) {
         Task {
             let state = await HostClient.fetchState()
-            let entry = NowPlayingEntry(date: Date(), state: state, artwork: await Self.artwork(state))
-            // The host pushes a reload whenever anything changes, so this is only a safety net
-            // for the case where the host dies without telling anyone.
+            let artwork = await Self.artwork(state)
             let now = Date()
-            let next = now.addingTimeInterval(300)
-            if let expiry = state.validUntil {
-                var unavailable = NowPlaying.empty
-                unavailable.statusNote = "Safari update unavailable"
-                unavailable.sourceSelection = state.sourceSelection
-                unavailable.sourceActive = state.sourceActive
-                let expired = NowPlayingEntry(date: max(expiry, now), state: unavailable)
-                completion(Timeline(entries: expiry > now ? [entry, expired] : [expired], policy: .after(next)))
-            } else {
-                completion(Timeline(entries: [entry], policy: .after(next)))
+            let entries = WidgetDisplaySnapshot.timeline(for: state, now: now).map {
+                NowPlayingEntry(date: $0.date, state: $0.state, artwork: artwork, isStale: $0.isStale)
             }
+            completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(300))))
         }
     }
 }
@@ -176,21 +178,23 @@ struct MusicWidgetView: View {
             Text(state.title.isEmpty ? "—" : state.title)
                 .font(.system(size: 13, weight: .semibold))
                 .lineLimit(2)
-            Text(state.webDocumentID != nil ? (state.isPlaying ? "Playing · Safari" : "Paused · Safari") : state.artist)
+            Text(playbackLabel)
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             Spacer(minLength: 0)
             HStack(spacing: 10) {
                 Button(intent: PreviousTrackIntent(documentID: state.webDocumentID, videoID: state.webVideoID)) { Image(systemName: "backward.fill") }
-                    .disabled(state.canGoPrevious == false)
+                    .disabled(entry.isStale || state.canGoPrevious == false)
                     .accessibilityLabel("Previous")
                 Button(intent: PlayPauseIntent(documentID: state.webDocumentID, videoID: state.webVideoID)) {
                     Image(systemName: state.isPlaying ? "pause.fill" : "play.fill")
                 }
+                .disabled(entry.isStale)
                 Button(intent: NextTrackIntent(documentID: state.webDocumentID, videoID: state.webVideoID)) { Image(systemName: "forward.fill") }
-                    .disabled(state.canGoNext == false)
+                    .disabled(entry.isStale || state.canGoNext == false)
                     .accessibilityLabel("Next")
+                refreshButton
             }
             .buttonStyle(.plain)
             .font(.system(size: 13, weight: .semibold))
@@ -213,7 +217,7 @@ struct MusicWidgetView: View {
                     // title gets squeezed back to a single truncated line.
                     .fixedSize(horizontal: false, vertical: true)
                     .layoutPriority(1)
-                Text(state.webDocumentID != nil ? (state.isPlaying ? "Playing · Safari" : "Paused · Safari") : state.artist)
+                Text(playbackLabel)
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -224,15 +228,17 @@ struct MusicWidgetView: View {
 
                 HStack(spacing: 16) {
                     Button(intent: PreviousTrackIntent(documentID: state.webDocumentID, videoID: state.webVideoID)) { Image(systemName: "backward.fill") }
-                    .disabled(state.canGoPrevious == false)
+                    .disabled(entry.isStale || state.canGoPrevious == false)
                     .accessibilityLabel("Previous")
                     Button(intent: PlayPauseIntent(documentID: state.webDocumentID, videoID: state.webVideoID)) {
                         Image(systemName: state.isPlaying ? "pause.fill" : "play.fill")
                             .font(.system(size: 17, weight: .semibold))
                     }
+                    .disabled(entry.isStale)
                     Button(intent: NextTrackIntent(documentID: state.webDocumentID, videoID: state.webVideoID)) { Image(systemName: "forward.fill") }
-                    .disabled(state.canGoNext == false)
+                    .disabled(entry.isStale || state.canGoNext == false)
                     .accessibilityLabel("Next")
+                    refreshButton
 
                     if state.showSourceButton {
                         Spacer(minLength: 6)
@@ -246,6 +252,18 @@ struct MusicWidgetView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var playbackLabel: String {
+        if entry.isStale { return "업데이트 대기 · Safari" }
+        return state.webDocumentID != nil ? (state.isPlaying ? "Playing · Safari" : "Paused · Safari") : state.artist
+    }
+
+    private var refreshButton: some View {
+        Button(intent: RefreshMediaIntent()) { Image(systemName: "arrow.clockwise") }
+            .buttonStyle(.plain)
+            .accessibilityLabel("새로 고침")
+            .help("현재 미디어 정보 새로 고침")
     }
 
     /// Tapping cycles Auto -> Safari YouTube -> YouTube Music -> Spotify -> Apple Music. A widget button can only
@@ -350,6 +368,9 @@ struct MusicWidgetView: View {
                 .font(.system(size: 12, weight: .medium))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
+            Button("새로 고침", intent: RefreshMediaIntent())
+                .buttonStyle(.plain)
+                .font(.system(size: 11, weight: .medium))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
