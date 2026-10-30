@@ -2,6 +2,10 @@
   const documentID = crypto.randomUUID();
   let musicKey = '';
   let musicID = '';
+  let musicVideo;
+  let musicSource = '';
+  let musicGeneration = 0;
+  let musicLoading = false;
   let lastSignature = '';
   let lastCommandID = '';
   const enabled = button => !!button && !button.disabled && button.getAttribute('aria-disabled') !== 'true' && button.getClientRects().length > 0;
@@ -9,20 +13,32 @@
   let scheduled;
   let navigating = false;
   let readNote = '';
+  function observeMusicResource(video) {
+    const source = video.currentSrc || '';
+    if (video === musicVideo && source === musicSource) return false;
+    musicVideo = video;
+    musicSource = source;
+    musicGeneration++;
+    return true;
+  }
   function read() {
     readNote = '';
     if (MacMusicWidgetMedia.isMusicURL(location.href)) {
       const bar = document.querySelector('ytmusic-player-bar');
       const player = document.querySelector('#movie_player');
-      const video = player?.querySelector('video') || document.querySelector('video');
+      const video = player?.querySelector('video');
       if (!bar || !video) { readNote = 'Music player not found'; return null; }
+      // A track's DOM title can lag behind its actual media resource. Commands
+      // must notice a new element/source even before the next published snapshot.
+      observeMusicResource(video);
       const snapshot = MacMusicWidgetMedia.musicSnapshot({ url: location.href,
         title: bar.querySelector('.title')?.textContent, author: bar.querySelector('.byline')?.textContent,
         artworkURL: bar.querySelector('img')?.src, paused: video.paused, ended: video.ended,
         readyState: video.readyState, ad: !!player?.classList.contains('ad-showing'),
         canGoNext: enabled(bar.querySelector('.next-button')), canGoPrevious: enabled(bar.querySelector('.previous-button')) });
       if (!snapshot) { readNote = `Music metadata unavailable (ready=${video.readyState})`; return null; }
-      const key = JSON.stringify([snapshot.title, snapshot.author, snapshot.artworkURL]);
+      musicLoading = false;
+      const key = JSON.stringify([musicGeneration, musicSource, snapshot.title, snapshot.author, snapshot.artworkURL]);
       if (key !== musicKey) { musicKey = key; musicID = crypto.randomUUID(); }
       return { ...snapshot, videoID: musicID };
     }
@@ -57,8 +73,23 @@
     if (scheduled) return;
     scheduled = setTimeout(() => { scheduled = undefined; void publish(); }, 250);
   }
+  function mediaEvent(event) {
+    if (MacMusicWidgetMedia.isMusicURL(location.href)) {
+      const video = document.querySelector('#movie_player')?.querySelector('video');
+      // Preview videos elsewhere on the page must not change this track's target.
+      if (!video || event.target !== video) return;
+      if (event.type === 'emptied' || event.type === 'loadedmetadata') {
+        const changed = observeMusicResource(video);
+        // Some players reuse a MediaSource Blob URL. Invalidate that generation
+        // too, grouping an emptied/loadedmetadata pair as one reload cycle.
+        if (!changed && !musicLoading) musicGeneration++;
+        musicLoading = event.type === 'emptied';
+      }
+    }
+    schedule();
+  }
   for (const event of ['play', 'pause', 'ended', 'loadedmetadata', 'emptied']) {
-    document.addEventListener(event, schedule, true);
+    document.addEventListener(event, mediaEvent, true);
   }
   document.addEventListener('yt-navigate-start', () => { navigating = true; void publish(true); });
   document.addEventListener('yt-navigate-finish', () => { navigating = false; schedule(); });
@@ -78,7 +109,7 @@
     lastCommandID = command.id;
     const isMusic = snapshot.source === 'youtubeMusic';
     const player = document.querySelector(isMusic ? 'ytmusic-player-bar' : '#movie_player');
-    const video = isMusic ? (document.querySelector('#movie_player')?.querySelector('video') || document.querySelector('video')) : player?.querySelector('video');
+    const video = isMusic ? document.querySelector('#movie_player')?.querySelector('video') : player?.querySelector('video');
     try {
       if (command.action === 'playPause') {
         if (video.paused) await video.play(); else video.pause();
