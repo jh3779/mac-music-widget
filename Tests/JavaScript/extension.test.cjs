@@ -43,7 +43,7 @@ test('native commands route to the reporting tab; close and navigation clear met
   await new Promise(resolve => setImmediate(resolve));
   assert.deepEqual(b.calls.slice(1).map(x => x.kind), ['clear', 'clear', 'clear']);
 });
-function content() {
+function content(music = false) {
   let listener, heartbeat;
   const events = {}, sent = [];
   const video = { paused: true, ended: false, readyState: 4, async play() { this.paused = false; }, pause() { this.paused = true; } };
@@ -51,18 +51,51 @@ function content() {
   const previous = { ...next, getClientRects() { return []; } };
   const player = { classList: { contains() { return false; } }, querySelector(selector) { return { video, '.ytp-next-button': next, '.ytp-prev-button': previous }[selector]; } };
   const page = { getAttribute() { return 'dQw4w9WgXcQ'; }, querySelector(selector) { return { textContent: selector.includes('h1') ? 'Video' : 'Channel' }; } };
-  const location = { href: url };
-  const ctx = vm.createContext({ URL, Date, location, crypto: { randomUUID: () => documentID },
+  const title = { textContent: 'Song' };
+  const bar = { querySelector(selector) { return { '.title': title, '.byline': { textContent: 'Artist • Album' }, img: { src: 'https://lh3.googleusercontent.com/cover=w60-h60' }, '.next-button': next, '.previous-button': previous }[selector]; } };
+  const location = { href: music ? 'https://music.youtube.com/' : url };
+  let uuid = 0;
+  const ctx = vm.createContext({ URL, Date, location, crypto: { randomUUID: () => uuid++ === 0 ? documentID : `00000000-0000-4000-8000-${String(uuid).padStart(12, '0')}` },
     setTimeout(fn) { return 1; }, setInterval(fn) { heartbeat = fn; },
     MutationObserver: class { observe() {} },
     window: { addEventListener(name, fn) { events[name] = fn; } },
-    document: { documentElement: {}, querySelector(selector) { return { 'ytd-watch-flexy': page, '#movie_player': player }[selector]; }, addEventListener(name, fn) { events[name] = fn; } },
+    document: { documentElement: {}, querySelector(selector) { return { 'ytd-watch-flexy': page, '#movie_player': player, 'ytmusic-player-bar': bar, video }[selector]; }, addEventListener(name, fn) { events[name] = fn; } },
     browser: { runtime: { async sendMessage(value) { sent.push(value); return { ok: true }; }, onMessage: { addListener(fn) { listener = fn; } } } }
   });
   load('media', ctx); load('content', ctx);
-  const command = (action, overrides = {}) => listener({ kind: 'command', command: { id: Math.random().toString(), action, videoID: metadata.videoID, documentID, expiresAt: Date.now() / 1000 + 8, ...overrides } });
-  return { command, video, next, previous, events, sent, location, heartbeat: () => heartbeat() };
+  const command = (action, overrides = {}) => listener({ kind: 'command', command: { id: Math.random().toString(), action, videoID: sent[0].snapshot.videoID, documentID, expiresAt: Date.now() / 1000 + 8, ...overrides } });
+  return { command, video, next, previous, title, events, sent, location, heartbeat: () => heartbeat() };
 }
+test('YouTube Music publishes without a watch URL, routes controls and rejects an old song target', async () => {
+  const c = content(true);
+  const snapshot = c.sent[0].snapshot;
+  assert.equal(snapshot.source, 'youtubeMusic');
+  assert.equal(snapshot.title, 'Song');
+  assert.equal(snapshot.author, 'Artist');
+  assert.match(snapshot.artworkURL, /^https:\/\/lh3.googleusercontent.com\//);
+  assert.equal((await c.command('playPause')).ok, true);
+  assert.equal(c.video.paused, false);
+  assert.equal((await c.command('next')).ok, true);
+  assert.equal(c.next.clicks, 1);
+  assert.equal((await c.command('previous')).ok, false);
+  c.title.textContent = 'Another song';
+  assert.equal((await c.command('pause')).ok, false);
+  assert.equal(c.video.paused, false);
+  c.heartbeat();
+  const changed = c.sent.at(-1).snapshot;
+  assert.notEqual(changed.videoID, snapshot.videoID);
+  assert.equal((await c.command('pause', { videoID: changed.videoID })).ok, true);
+});
+test('background requires Music identity on the exact Music origin and preserves artwork', async () => {
+  const b = background();
+  const sender = { url: 'https://music.youtube.com/', frameId: 0, tab: { id: 42, incognito: false } };
+  const snapshot = { ...metadata, source: 'youtubeMusic', videoID: documentID, artworkURL: 'https://lh3.googleusercontent.com/cover' };
+  assert.equal((await b.send({ kind: 'snapshot', snapshot: metadata }, sender)).ok, false);
+  assert.equal((await b.send({ kind: 'snapshot', snapshot })).ok, false);
+  assert.equal((await b.send({ kind: 'snapshot', snapshot }, sender)).ok, true);
+  assert.equal(b.calls[0].source, 'youtubeMusic');
+  assert.equal(b.calls[0].artworkURL, snapshot.artworkURL);
+});
 test('content publishes a thumbnail identity without embedding or fetching video', () => {
   const c = content();
   assert.equal(c.sent[0].snapshot.videoID, metadata.videoID);

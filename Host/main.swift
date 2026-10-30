@@ -29,7 +29,6 @@ final class HostDelegate: NSObject, NSApplicationDelegate {
     private var pollGeneration = 0
     private var youtubePollInFlight = false
     private var interactionExpires = Date.distantPast
-    private var displayedSafari: WebMediaSnapshot?
     private var timer: Timer?
 
     /// Cover art for sources that hand over bytes (Apple Music), served over loopback.
@@ -103,18 +102,16 @@ final class HostDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func pollSafariYouTube() -> SourceTrack {
+    private func pollSafariYouTube(source: String = "safariYouTube") -> SourceTrack {
         var track = SourceTrack()
         guard let store = WebMediaStore.configured() else {
             track.note = "Safari App Group not configured"
             return track
         }
-        guard let snapshot = WebMediaSnapshot.select(store.snapshots()) else {
+        guard let snapshot = WebMediaSnapshot.select(store.snapshots().filter { ($0.source ?? "safariYouTube") == source }) else {
             track.note = "Enable Safari extension and play a YouTube video"
-            displayedSafari = nil
             return track
         }
-        displayedSafari = snapshot
         track.title = snapshot.title
         track.artist = snapshot.author
         track.artworkURL = snapshot.artworkURL
@@ -129,6 +126,10 @@ final class HostDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func pollYouTubeMusic(_ completion: @escaping (SourceTrack) -> Void) {
+        if browser == .safari, WebMediaStore.configured() != nil {
+            completion(pollSafariYouTube(source: "youtubeMusic"))
+            return
+        }
         guard !youtubePollInFlight else { return }
         youtubePollInFlight = true
         let generation = pollGeneration
@@ -249,7 +250,7 @@ final class HostDelegate: NSObject, NSApplicationDelegate {
     /// what the widget is actually showing.
     private func run(_ command: WidgetCommand, documentID: String?, videoID: String?) {
         if command != .cycleSource {
-            if resolvedKind == .safariYouTube {
+            if state.webDocumentID != nil {
                 guard let documentID, let videoID, documentID == state.webDocumentID, videoID == state.webVideoID else { return }
             } else if documentID != nil || videoID != nil { return }
         }
@@ -274,6 +275,11 @@ final class HostDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
+        if state.webDocumentID != nil {
+            if let action = SafariCommand.Action(rawValue: command.rawValue) { sendSafari(action) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in self?.poll() }
+            return
+        }
         switch resolvedKind {
         case .safariYouTube:
             if let action = SafariCommand.Action(rawValue: command.rawValue) { sendSafari(action) }
@@ -296,12 +302,14 @@ final class HostDelegate: NSObject, NSApplicationDelegate {
     /// backend uses a real pause rather than a toggle, so pausing an idle player does nothing.
     private func sendSafari(_ action: SafariCommand.Action) {
         // Address the exact document that supplied the displayed state, never the frontmost tab.
-        guard let snapshot = displayedSafari, let store = WebMediaStore.configured() else { return }
+        guard let store = WebMediaStore.configured(),
+              let snapshot = store.snapshots().first(where: { $0.documentID == state.webDocumentID && $0.videoID == state.webVideoID }) else { return }
         do { try store.enqueue(action, for: snapshot) }
         catch { Log.write("Safari command unavailable; metadata may have expired") }
     }
 
     private func pauseCurrentSource() {
+        if state.webDocumentID != nil { sendSafari(.pause); return }
         switch resolvedKind {
         case .safariYouTube: sendSafari(.pause)
         case .spotify: SpotifyController.pause()

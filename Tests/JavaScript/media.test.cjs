@@ -32,7 +32,7 @@ test('Instagram posts, reels, embeds and subdomains are explicitly excluded', ()
     'https://www.instagram.com/watch?v=dQw4w9WgXcQ'
   ]) assert.equal(m.videoID(url), null);
   const manifest = JSON.parse(fs.readFileSync('Safari/Resources/manifest.json', 'utf8'));
-  assert.deepEqual(manifest.content_scripts[0].matches, ['https://www.youtube.com/*']);
+  assert.deepEqual(manifest.content_scripts[0].matches, ['https://www.youtube.com/*', 'https://music.youtube.com/*']);
   assert.equal(manifest.content_scripts[0].all_frames, false);
   assert.ok(!manifest.permissions.some(value => value.includes('instagram') || value === '<all_urls>'));
 });

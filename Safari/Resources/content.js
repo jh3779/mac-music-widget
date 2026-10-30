@@ -1,5 +1,7 @@
 (() => {
   const documentID = crypto.randomUUID();
+  let musicKey = '';
+  let musicID = '';
   let lastSignature = '';
   let lastCommandID = '';
   const enabled = button => !!button && !button.disabled && button.getAttribute('aria-disabled') !== 'true' && button.getClientRects().length > 0;
@@ -7,6 +9,21 @@
   let scheduled;
   let navigating = false;
   function read() {
+    if (MediaMetadata.isMusicURL(location.href)) {
+      const bar = document.querySelector('ytmusic-player-bar');
+      const video = document.querySelector('video');
+      const player = document.querySelector('#movie_player');
+      if (!bar || !video) return null;
+      const snapshot = MediaMetadata.musicSnapshot({ url: location.href,
+        title: bar.querySelector('.title')?.textContent, author: bar.querySelector('.byline')?.textContent,
+        artworkURL: bar.querySelector('img')?.src, paused: video.paused, ended: video.ended,
+        readyState: video.readyState, ad: !!player?.classList.contains('ad-showing'),
+        canGoNext: enabled(bar.querySelector('.next-button')), canGoPrevious: enabled(bar.querySelector('.previous-button')) });
+      if (!snapshot) return null;
+      const key = JSON.stringify([snapshot.title, snapshot.author, snapshot.artworkURL]);
+      if (key !== musicKey) { musicKey = key; musicID = crypto.randomUUID(); }
+      return { ...snapshot, videoID: musicID };
+    }
     const page = document.querySelector('ytd-watch-flexy');
     const player = document.querySelector('#movie_player');
     const video = player?.querySelector('video');
@@ -51,21 +68,21 @@
   });
   browser.runtime.onMessage.addListener(async message => {
     const command = message?.command;
-    if (message?.kind !== 'command' || !command || command.documentID !== documentID ||
-        command.videoID !== MediaMetadata.videoID(location.href) || command.id === lastCommandID ||
-        !Number.isFinite(command.expiresAt) || Date.now() / 1000 >= command.expiresAt) return { ok: false };
     const snapshot = read();
-    if (!snapshot) return { ok: false };
+    if (message?.kind !== 'command' || !command || command.documentID !== documentID ||
+        !snapshot || command.videoID !== snapshot.videoID || command.id === lastCommandID ||
+        !Number.isFinite(command.expiresAt) || Date.now() / 1000 >= command.expiresAt) return { ok: false };
     lastCommandID = command.id;
-    const player = document.querySelector('#movie_player');
-    const video = player?.querySelector('video');
+    const isMusic = snapshot.source === 'youtubeMusic';
+    const player = document.querySelector(isMusic ? 'ytmusic-player-bar' : '#movie_player');
+    const video = isMusic ? document.querySelector('video') : player?.querySelector('video');
     try {
       if (command.action === 'playPause') {
         if (video.paused) await video.play(); else video.pause();
       } else if (command.action === 'pause') {
         video.pause();
       } else {
-        const selector = { next: '.ytp-next-button', previous: '.ytp-prev-button' }[command.action];
+        const selector = (isMusic ? { next: '.next-button', previous: '.previous-button' } : { next: '.ytp-next-button', previous: '.ytp-prev-button' })[command.action];
         const button = selector && player.querySelector(selector);
         if (!enabled(button)) return { ok: false };
         button.click();

@@ -16,8 +16,10 @@ struct WebMediaSnapshot: Codable, Equatable {
     let canGoPrevious: Bool
     let receivedAt: Date
     var changedAt: Date
+    var source: String? = nil
+    var musicArtworkURL: String? = nil
 
-    var artworkURL: String { "https://i.ytimg.com/vi/\(videoID)/hqdefault.jpg" }
+    var artworkURL: String { source == "youtubeMusic" ? (musicArtworkURL ?? "") : "https://i.ytimg.com/vi/\(videoID)/hqdefault.jpg" }
     var expiresAt: Date { receivedAt.addingTimeInterval(Self.lifetime) }
 
     static func validTabID(_ value: Any?) -> Int? {
@@ -30,10 +32,19 @@ struct WebMediaSnapshot: Codable, Equatable {
     }
 
     static func decode(_ message: [String: Any], now: Date = Date()) throws -> Self {
+        let source = message["source"] as? String ?? "safariYouTube"
+        let artwork = message["artworkURL"] as? String ?? ""
+        guard ["safariYouTube", "youtubeMusic"].contains(source) else { throw WebMediaError.invalidMessage }
+        if source == "youtubeMusic", !artwork.isEmpty {
+            guard artwork.count <= 2048, let url = URL(string: artwork), url.scheme == "https",
+                  url.user == nil, url.password == nil, url.port == nil, let host = url.host,
+                  ["googleusercontent.com", "ytimg.com"].contains(where: { host == $0 || host.hasSuffix("." + $0) })
+            else { throw WebMediaError.invalidMessage }
+        }
         guard validTabID(message["version"]) == 1,
               let tabID = validTabID(message["tabID"]),
               let videoID = message["videoID"] as? String,
-              videoID.range(of: "^[A-Za-z0-9_-]{11}$", options: .regularExpression) != nil,
+              (source == "youtubeMusic" ? UUID(uuidString: videoID) != nil : videoID.range(of: "^[A-Za-z0-9_-]{11}$", options: .regularExpression) != nil),
               let rawTitle = message["title"] as? String, rawTitle.count <= 512,
               let author = message["author"] as? String, author.count <= 256,
               let playing = message["isPlaying"] as? NSNumber,
@@ -43,9 +54,9 @@ struct WebMediaSnapshot: Codable, Equatable {
               let previous = message["canGoPrevious"] as? NSNumber, CFGetTypeID(previous) == CFBooleanGetTypeID() else { throw WebMediaError.invalidMessage }
         let title = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !title.isEmpty else { throw WebMediaError.invalidMessage }
-        // The thumbnail URL is constructed here; web content cannot supply arbitrary fetch URLs.
+        // Video artwork is constructed here; music artwork is restricted to HTTPS YouTube CDNs.
         return Self(tabID: tabID, videoID: videoID, title: title, author: author,
-                    isPlaying: playing.boolValue, documentID: documentID, canGoNext: next.boolValue, canGoPrevious: previous.boolValue, receivedAt: now, changedAt: now)
+                    isPlaying: playing.boolValue, documentID: documentID, canGoNext: next.boolValue, canGoPrevious: previous.boolValue, receivedAt: now, changedAt: now, source: source, musicArtworkURL: source == "youtubeMusic" ? artwork : nil)
     }
 
     static func select(_ snapshots: [Self], now: Date = Date()) -> Self? {

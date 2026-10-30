@@ -41,6 +41,8 @@ targets:
       path: Safari/Info.plist
       properties:
         CFBundleDisplayName: Safari YouTube Widget
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         MediaAppGroup: $(APP_GROUP_IDENTIFIER)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.Safari.web-extension

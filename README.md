@@ -12,15 +12,16 @@ Safari YouTube의 **썸네일·제목·재생/일시정지·이전·다음**을 
 
 </div>
 
-> 개발 중인 MVP입니다. Swift/JavaScript 자동 테스트와 Xcode 빌드는 검증했습니다.
-> 서명된 Safari 확장 설치, 실제 YouTube와 알림 센터의 전체 동작은 아직 검증하지 않았습니다.
+> 개발 중인 MVP입니다. 자동 테스트, 서명된 1.2.0 앱 설치와 Safari의 실제 YouTube Music → 호스트 전달을 확인했습니다.
+> 일반 YouTube 영상, 알림 센터 화면과 실제 재생 버튼의 전체 동작 검증은 남아 있습니다.
 > [검증 결과와 미확인 항목](docs/testing/safari-mvp.md)을 먼저 확인하세요.
 
 ## 범위
 
 - **Safari 일반 YouTube 영상**: `https://www.youtube.com/watch?v=…`의 제목, 썸네일, 재생/일시정지 상태.
+- **Safari YouTube Music**: `https://music.youtube.com/`에서 현재 곡의 제목·아트워크·상태를 같은 확장으로 읽습니다. 주소에 영상 ID가 없어도 동작하며, JavaScript from Apple Events 설정이 필요 없습니다.
 - **재생 제어**: 열려 있는 해당 Safari 탭만 조작합니다. 이전/다음은 YouTube 플레이어의 버튼이 사용 가능할 때만 활성화됩니다. 이전 버튼이 없는 일반 영상에서는 이전 이동을 제공하지 않습니다.
-- **기존 음악 지원 유지**: Spotify, Apple Music, YouTube Music의 읽기·제어 경로를 보존했습니다. 기존 음악 앱과의 실제 회귀 확인은 수동 검증 항목입니다.
+- **기존 음악 지원 유지**: Spotify·Apple Music 어댑터를 유지했습니다. Safari 포함 빌드의 YouTube Music은 확장을 사용하고, 음악 전용 빌드와 다른 브라우저는 기존 AppleScript 경로를 사용합니다. 기존 음악 앱과의 실제 회귀 확인은 수동 검증 항목입니다.
 - **Instagram 제외**: 게시물, 릴스, 임베드, 하위 도메인에 접근하거나 메타데이터를 수집하지 않습니다. YouTube 최상위 페이지에만 확장 권한을 요청합니다.
 - 광고 재생 중, Shorts, 다른 사이트의 YouTube 임베드, 비공개 브라우징은 MVP 지원 범위 밖입니다.
 - 다른 스트리밍 사이트는 사이트별 메타데이터·권한·DRM 검증 후 확장합니다. 범용 스트리밍 지원으로 간주하지 마세요.
@@ -44,13 +45,12 @@ open MacMusicWidget.xcodeproj
 
 1. 프로젝트의 `BUNDLE_ID_PREFIX`를 자신이 사용할 고유한 reverse-DNS 식별자로 바꿉니다. 예: `com.yourname.macmusicwidget`.
 2. 세 타깃 `MacMusicWidgetHost`, `MacMusicWidgetExtension`, `SafariWebExtension`에 **같은 개발 Team**을 지정합니다. Automatic Signing을 사용합니다.
-3. 호스트와 Safari 확장의 **Signing & Capabilities → App Groups**에 같은 그룹을 추가합니다. 권장 형식은 본인의 계정에 등록한 `group.<고유이름>`입니다.
+3. 호스트와 Safari 확장의 **Signing & Capabilities → App Groups**에 같은 그룹을 추가합니다. macOS 개인 설치에는 `TEAMID.<고유이름>` 형식을 사용할 수 있습니다. `group.<고유이름>` 형식은 계정에 등록하고 해당 그룹을 포함한 프로비저닝 프로필을 준비합니다.
 4. 프로젝트 Build Settings의 `APP_GROUP_IDENTIFIER`를 그 값으로 바꿉니다. 호스트와 Safari 확장의 `MediaAppGroup` Info.plist 값 및 entitlement가 모두 이 설정을 참조합니다. 기본 `group.com.jh3779.macmusicwidget`을 다른 계정에서 그대로 사용하지 마세요.
 5. `MacMusicWidgetHost` 스킴으로 빌드하고 실행합니다. 호스트 안에 WidgetKit 및 Safari 확장이 함께 포함됩니다.
 6. 재생성하면 Xcode에서 직접 수정한 설정이 사라질 수 있습니다. 지속할 설정은 로컬 `project-safari.yml`이나 아래 명령의 환경값에 반영하세요. 개인 Team/프로필 파일을 PR에 커밋할 필요는 없습니다.
 
-권장 `group.` 방식에는 해당 그룹이 포함된 프로비저닝 프로필이 필요합니다.
-macOS는 `TEAMID.<group name>` 형식도 지원하지만 제약이 다릅니다. 서명 없이 App Group을 쓸 수 있다고 가정하지 마세요.
+이 작업의 로컬 설치는 같은 Apple Development 인증서와 `TEAMID.<group name>` 형식으로 서명했습니다. 서명 없이 App Group을 쓸 수 있다고 가정하지 마세요.
 [Apple의 App Group 설정 문서](https://developer.apple.com/documentation/xcode/accessing-app-group-containers)를 참고하세요.
 
 설정이 준비됐다면 명령으로 빌드할 수도 있습니다. 다음 값은 예시이며 실제 값으로 교체해야 합니다.
@@ -64,18 +64,17 @@ BUNDLE_ID_PREFIX=com.yourname.macmusicwidget \
 
 앱은 `build/Mac Music Widget.app`에 생성됩니다. Finder로 `/Applications`에 복사하고 실행하세요.
 `./build.sh --safari --install`은 기존 `/Applications/Mac Music Widget.app`을 교체하므로 기존 설치를 보관하려면 먼저 다른 곳에 복사하세요.
-이 작업에서는 앱 설치나 사용자 Safari 설정 변경을 실행하지 않았습니다.
+1.2.0은 이 작업의 Mac에서 `/Applications/Mac Music Widget.app`에 설치하고 실행했습니다. 개인 개발 서명이며 공증된 일반 배포 릴리스가 아닙니다. 다른 Mac의 설치·실행을 보증하지 않습니다.
 
 ### Safari 권한
 
 1. Safari → **설정 → 확장 프로그램**에서 **Mac Music Widget — Safari YouTube**를 켭니다.
-2. `youtube.com` 접근을 명시적으로 허용합니다. 확장이 보이지 않으면 앱을 실행한 뒤 메뉴 막대의 음표 → **Safari Extension Settings…**를 선택합니다.
-3. 이미 열린 YouTube 탭을 새로고침한 뒤 일반 영상을 한 번 직접 재생합니다.
+2. `www.youtube.com`과 `music.youtube.com` 접근을 명시적으로 허용합니다. Safari는 권한 목록에서 둘을 `youtube.com`으로 묶어 표시할 수 있습니다. 실제 확장의 접근 대상은 이 두 호스트뿐입니다. 확장이 보이지 않으면 앱을 실행한 뒤 메뉴 막대의 음표 → **Safari Extension Settings…**를 선택합니다.
+3. 새 정보가 오지 않으면 이미 열린 YouTube/YouTube Music 탭을 새로고침하고 직접 재생합니다.
 4. 확장 툴바 팝업에서 Native bridge 상태를 확인합니다. 정상 표시는 네이티브 연결 확인이며, 호스트 실행이나 위젯 표시까지 검증한 것은 아닙니다.
-5. 일반 영상 경로는 **Allow JavaScript from Apple Events가 필요하지 않습니다**. 이 설정은 기존 YouTube Music AppleScript 경로에만 필요합니다.
+5. 이 Safari 확장을 사용하는 일반 영상 및 YouTube Music 경로는 **Allow JavaScript from Apple Events가 필요하지 않습니다**. 이 설정은 음악 전용 빌드의 기존 Safari AppleScript 경로에만 필요합니다.
 
-개발용 서명 방식에 따라 Safari의 개발 메뉴에서 **Allow Unsigned Extensions**를 켜야 할 수 있습니다.
-이 옵션만으로 잘못된 App Group 서명이 해결되지는 않습니다. 실제 사용자 동의는 앱이 대신 설정하지 않습니다.
+이 작업의 설치본은 **Allow Unsigned Extensions를 켜지 않고** 활성화했습니다. 설정이 필요한지 먼저 서명을 확인하세요. Safari 확장과 웹사이트 접근은 사용자 동의가 필요합니다. 개인정보 보호 브라우징 접근은 요청하거나 활성화하지 않습니다.
 
 ### 알림 센터에 추가
 
@@ -127,8 +126,8 @@ Apple은 일반적으로 자주 보는 위젯에 하루 40–70회의 갱신 예
   → 다음 native 응답 → 정확한 문서/영상이 일치하는 Safari 탭
 ```
 
-확장은 제목·채널·영상 ID·재생 상태·버튼 가능 여부·무작위 문서 ID만 공유합니다. 쿠키, 로그인 정보, 전체 방문 URL, 영상 바이트를 수집하지 않습니다.
-썸네일은 검증된 영상 ID로 만든 `i.ytimg.com` HTTPS 주소에서 위젯이 가져옵니다. Instagram 수집 경로와 화면 캡처 코드는 없습니다.
+확장은 제목·채널/아티스트·미디어 식별자·재생 상태·버튼 가능 여부·무작위 문서 ID와 필요한 아트워크 주소만 공유합니다. 쿠키, 로그인 정보, 전체 방문 URL, 영상 바이트를 수집하지 않습니다.
+일반 영상 썸네일은 검증된 영상 ID로 만든 `i.ytimg.com` HTTPS 주소를 사용합니다. YouTube Music은 곡 변경마다 생성한 임시 ID와 `googleusercontent.com`/`ytimg.com` 계열의 검증된 HTTPS 아트워크만 허용합니다. Instagram 수집 경로와 화면 캡처 코드는 없습니다.
 로컬 App Group에는 각 탭의 최신 스냅샷만 저장합니다. 닫힘 이벤트로 제거하고, 새 데이터 수신 시 만료 스냅샷을 정리합니다. 강제 종료·권한 철회 후 수신이 완전히 끊기면 이전 파일이 디스크에 남을 수 있으나 만료 데이터는 표시 대상으로 선택하지 않습니다.
 로컬 HTTP는 웹 Origin/Referer 요청, 잘못된 Host 및 GET 제어를 거절합니다. 같은 사용자 권한의 로컬 프로세스에 대한 인증 경계는 아니며, 원본의 loopback 구조를 유지합니다.
 

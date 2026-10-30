@@ -10,8 +10,8 @@ settings:
     CODE_SIGNING_REQUIRED: "YES"
     CODE_SIGNING_ALLOWED: "YES"
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "1.1.0"
-    CURRENT_PROJECT_VERSION: "1"
+    MARKETING_VERSION: "1.2.0"
+    CURRENT_PROJECT_VERSION: "2"
     ENABLE_HARDENED_RUNTIME: "YES"
 targets:
   MacMusicWidgetHost:
@@ -25,6 +25,8 @@ targets:
     info:
       path: Host/Info.plist
       properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleName: Mac Music Widget
         CFBundleDisplayName: Mac Music Widget
         CFBundleIconFile: AppIcon
@@ -61,6 +63,8 @@ targets:
     info:
       path: Widget/Info.plist
       properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleDisplayName: Mac Music Widget
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension

@@ -12,17 +12,22 @@ browser.runtime.onMessage.addListener((message, sender) => {
   // Check Safari-provided sender origin, never a URL supplied by the webpage.
   let url;
   try { url = new URL(sender.url); } catch { return Promise.resolve({ ok: false }); }
-  if (url.origin !== 'https://www.youtube.com') return Promise.resolve({ ok: false });
+  if (!['https://www.youtube.com', 'https://music.youtube.com'].includes(url.origin)) return Promise.resolve({ ok: false });
   const tabID = sender.tab.id;
   if (message.snapshot === null) return native({ kind: 'clear', version: 1, tabID });
   const value = message.snapshot;
-  if (!value || value.videoID !== MediaMetadata.videoID(sender.url) ||
+  const isMusic = MediaMetadata.isMusicURL(sender.url);
+  const identityMatches = value && (isMusic
+    ? value.source === 'youtubeMusic' && /^[0-9a-f-]{36}$/i.test(value.videoID)
+    : value.source !== 'youtubeMusic' && value.videoID === MediaMetadata.videoID(sender.url));
+  if (!identityMatches ||
       typeof value.documentID !== 'string' || !/^[0-9a-f-]{36}$/i.test(value.documentID) ||
       typeof value.canGoNext !== 'boolean' || typeof value.canGoPrevious !== 'boolean' ||
       typeof value.title !== 'string' || typeof value.author !== 'string' || typeof value.isPlaying !== 'boolean') {
     return Promise.resolve({ ok: false });
   }
   return native({ kind: 'snapshot', version: 1, tabID, videoID: value.videoID,
+    source: isMusic ? 'youtubeMusic' : 'safariYouTube', artworkURL: isMusic ? String(value.artworkURL || '').slice(0, 2048) : '',
     documentID: value.documentID, canGoNext: value.canGoNext, canGoPrevious: value.canGoPrevious,
     title: value.title.slice(0, 512), author: value.author.slice(0, 256), isPlaying: value.isPlaying
   }).then(async response => {

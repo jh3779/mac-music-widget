@@ -176,7 +176,7 @@ struct MusicWidgetView: View {
             Text(state.title.isEmpty ? "—" : state.title)
                 .font(.system(size: 13, weight: .semibold))
                 .lineLimit(2)
-            Text(state.effectiveSource == "safariYouTube" ? (state.isPlaying ? "Playing · Safari" : "Paused · Safari") : state.artist)
+            Text(state.webDocumentID != nil ? (state.isPlaying ? "Playing · Safari" : "Paused · Safari") : state.artist)
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
@@ -213,13 +213,13 @@ struct MusicWidgetView: View {
                     // title gets squeezed back to a single truncated line.
                     .fixedSize(horizontal: false, vertical: true)
                     .layoutPriority(1)
-                Text(state.effectiveSource == "safariYouTube" ? (state.isPlaying ? "Playing · Safari" : "Paused · Safari") : state.artist)
+                Text(state.webDocumentID != nil ? (state.isPlaying ? "Playing · Safari" : "Paused · Safari") : state.artist)
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
 
                 Spacer(minLength: 2)
-                if state.effectiveSource != "safariYouTube" { progress }
+                if state.webDocumentID == nil { progress }
                 Spacer(minLength: 2)
 
                 HStack(spacing: 16) {

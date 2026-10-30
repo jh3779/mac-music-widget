@@ -31,7 +31,7 @@ struct LoopbackRequest {
         let videos = (components.queryItems ?? []).filter { $0.name == "video" }
         guard videos.count <= 1 else { return nil }
         videoID = videos.first?.value
-        if let videoID, videoID.range(of: "^[A-Za-z0-9_-]{11}$", options: .regularExpression) == nil { return nil }
+        if let videoID, UUID(uuidString: videoID) == nil, videoID.range(of: "^[A-Za-z0-9_-]{11}$", options: .regularExpression) == nil { return nil }
         if let documentID, UUID(uuidString: documentID) == nil { return nil }
         if path.hasPrefix("/cmd/") {
             guard parts[0] == "POST", let parsed = WidgetCommand(rawValue: String(path.dropFirst(5))) else { return nil }
