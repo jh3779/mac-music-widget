@@ -2,6 +2,8 @@
 
 Date: 2026-10-30. User journeys: show regular Safari YouTube title/thumbnail/state in the **Notification Center WidgetKit widget**, control the existing Safari video without rendering video in the widget, preserve music adapters, and exclude Instagram.
 
+This file records the 1.2.2 installation evidence. The subsequent 1.2.3 agent review, 39-test suite and build checks are recorded in [merge-review.md](merge-review.md). The installed 1.2.2 app was not replaced during that source review.
+
 ## Executed results
 
 Environment: Apple Silicon Mac, Xcode 27.1 (`27A9275`), Apple Swift 6.4 compiler in Swift 5 language mode, XcodeGen 2.46.0, Node 26.0.0. Deployment target is macOS 14; this is not proof of runtime behavior on every supported OS.

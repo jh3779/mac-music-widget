@@ -1,18 +1,15 @@
 # Delivery self-evaluation
 
-Overall: **3.8/5**. Installed, permissioned and verified with real YouTube Music; general-video and broader regression acceptance remain explicitly open.
+Overall: **4.0/5** for the agent review and merge preparation.
 
 | Axis | Score | Evidence and improvement |
 |---|---:|---|
-| Accuracy | 4 | Thirteen Swift and fifteen JS tests pass, signed 1.2.2 builds and verifies, the user confirms Notification Center title/artwork, and a live pause/resume transport test restores playback. Direct AppIntent UI clicks and five-minute display timing are not claimed. |
-| Completeness | 3 | Fork, code, signed installation, allowed www/music Safari access, Instagram exclusion, download and PR are supplied. Regular YouTube live acceptance, previous/next and Spotify/Apple Music regressions remain to be run. |
-| Clarity | 4 | README distinguishes browser metadata lifetime, display freshness and system scheduling; popup now distinguishes native readiness from page delivery. Some diagnostic text remains English. |
-| Actionability | 4 | The app is installed and the downloadable archive contains the signed app and MIT notice. It is a personal development build; distribution to other Macs still needs an appropriate signing/notarization plan. |
-| Conciseness | 4 | User-facing results are brief; architecture and evidence stay in repository docs. The installation involved multiple corrections, recorded as evidence instead of hidden. |
+| Accuracy | 4 | Three independent reviews found four P2 regressions, now reproduced and fixed; a separate agent cross-reviewed the changes. 39 tests and both clean-source builds pass. Live verification of the new 1.2.3 changes remains distinct from the 1.2.2 installation evidence. |
+| Completeness | 4 | Findings, regression tests, fixes, CI and branch-independent installation instructions are supplied. The documented manual browser/player matrix remains to be completed before broader release claims. |
+| Clarity | 4 | The merge review maps concrete failures to fixes, source locations and RED/GREEN checkpoints. Some diagnostic messages remain English. |
+| Actionability | 4 | PR #1 contains a reviewable patch and repeatable automated checks. Its latest GitHub Validate run is the final CI evidence; existing installation is intentionally not replaced during a source review. |
+| Conciseness | 4 | Detailed evidence lives in merge-review.md and the PR, while the user-facing status is brief. Historical installation and current source results require explicit version labels. |
 
-Improvements, in impact order:
-1. Complete real regular-video, previous/next and native music-source regressions; promote the draft only after recording them.
-2. Observe Notification Center visible/hidden behavior for longer than five minutes, including manual refresh and direct AppIntent clicks.
-3. Localize setup/diagnostic messages consistently after the runtime acceptance matrix is complete.
+Next improvements: finish real general-video/transport/music-app acceptance; observe longer WidgetKit timing; localize diagnostics consistently.
 
-Self-check: the user can use the installed Music widget now and has confirmed its title/artwork. The remaining checks are specific and visible; a universal streaming or instant-update claim would be inaccurate.
+Self-check: this supports a source merge decision with stated limits, not a universal or notarized release claim.
