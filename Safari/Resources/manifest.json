@@ -1,0 +1,19 @@
+{
+  "manifest_version": 2,
+  "name": "Mac Music Widget — Safari YouTube",
+  "version": "1.1.0",
+  "description": "Shares YouTube video title, thumbnail identity and playback state with your local Notification Center widget.",
+  "permissions": ["nativeMessaging", "https://www.youtube.com/*"],
+  "background": { "scripts": ["media.js", "background.js"], "persistent": false },
+  "content_scripts": [{
+    "matches": ["https://www.youtube.com/*"],
+    "js": ["media.js", "content.js"],
+    "run_at": "document_idle",
+    "all_frames": false
+  }],
+  "browser_action": {
+    "default_title": "Safari YouTube widget",
+    "default_popup": "popup.html"
+  },
+  "content_security_policy": "script-src 'self'; object-src 'none'"
+}

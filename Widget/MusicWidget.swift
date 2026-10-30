@@ -106,8 +106,18 @@ struct Provider: TimelineProvider {
             let entry = NowPlayingEntry(date: Date(), state: state, artwork: await Self.artwork(state))
             // The host pushes a reload whenever anything changes, so this is only a safety net
             // for the case where the host dies without telling anyone.
-            let next = Date().addingTimeInterval(state.isPlaying ? 60 : 300)
-            completion(Timeline(entries: [entry], policy: .after(next)))
+            let now = Date()
+            let next = now.addingTimeInterval(300)
+            if let expiry = state.validUntil {
+                var unavailable = NowPlaying.empty
+                unavailable.statusNote = "Safari update unavailable"
+                unavailable.sourceSelection = state.sourceSelection
+                unavailable.sourceActive = state.sourceActive
+                let expired = NowPlayingEntry(date: max(expiry, now), state: unavailable)
+                completion(Timeline(entries: expiry > now ? [entry, expired] : [expired], policy: .after(next)))
+            } else {
+                completion(Timeline(entries: [entry], policy: .after(next)))
+            }
         }
     }
 }
@@ -154,17 +164,21 @@ struct MusicWidgetView: View {
             Text(state.title.isEmpty ? "—" : state.title)
                 .font(.system(size: 13, weight: .semibold))
                 .lineLimit(2)
-            Text(state.artist)
+            Text(state.effectiveSource == "safariYouTube" ? (state.isPlaying ? "Playing · Safari" : "Paused · Safari") : state.artist)
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             Spacer(minLength: 0)
             HStack(spacing: 10) {
                 Button(intent: PreviousTrackIntent()) { Image(systemName: "backward.fill") }
+                    .disabled(state.canGoPrevious == false)
+                    .accessibilityLabel("Previous")
                 Button(intent: PlayPauseIntent()) {
                     Image(systemName: state.isPlaying ? "pause.fill" : "play.fill")
                 }
                 Button(intent: NextTrackIntent()) { Image(systemName: "forward.fill") }
+                    .disabled(state.canGoNext == false)
+                    .accessibilityLabel("Next")
             }
             .buttonStyle(.plain)
             .font(.system(size: 13, weight: .semibold))
@@ -187,22 +201,26 @@ struct MusicWidgetView: View {
                     // title gets squeezed back to a single truncated line.
                     .fixedSize(horizontal: false, vertical: true)
                     .layoutPriority(1)
-                Text(state.artist)
+                Text(state.effectiveSource == "safariYouTube" ? (state.isPlaying ? "Playing · Safari" : "Paused · Safari") : state.artist)
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
 
                 Spacer(minLength: 2)
-                progress
+                if state.effectiveSource != "safariYouTube" { progress }
                 Spacer(minLength: 2)
 
                 HStack(spacing: 16) {
                     Button(intent: PreviousTrackIntent()) { Image(systemName: "backward.fill") }
+                    .disabled(state.canGoPrevious == false)
+                    .accessibilityLabel("Previous")
                     Button(intent: PlayPauseIntent()) {
                         Image(systemName: state.isPlaying ? "pause.fill" : "play.fill")
                             .font(.system(size: 17, weight: .semibold))
                     }
                     Button(intent: NextTrackIntent()) { Image(systemName: "forward.fill") }
+                    .disabled(state.canGoNext == false)
+                    .accessibilityLabel("Next")
 
                     if state.showSourceButton {
                         Spacer(minLength: 6)
@@ -296,7 +314,11 @@ struct MusicWidgetView: View {
     @ViewBuilder
     private var artworkContent: some View {
         if let artwork = entry.artwork {
-            artwork.resizable().scaledToFill()
+            if state.effectiveSource == "safariYouTube" {
+                artwork.resizable().scaledToFit()
+            } else {
+                artwork.resizable().scaledToFill()
+            }
         } else {
             ZStack {
                 Rectangle().fill(.white.opacity(0.12))
@@ -333,8 +355,8 @@ struct MacMusicWidget: Widget {
         StaticConfiguration(kind: "MacMusicWidget", provider: Provider()) { entry in
             MusicWidgetView(entry: entry)
         }
-        .configurationDisplayName("YouTube Music")
-        .description("Shows and controls what's playing in your browser.")
+        .configurationDisplayName("Mac Music Widget")
+        .description("Music and Safari YouTube in Notification Center: thumbnail, title and playback controls.")
         .supportedFamilies([.systemSmall, .systemMedium])
         .contentMarginsDisabled()
     }

@@ -18,6 +18,12 @@ struct NowPlaying: Codable, Equatable {
     /// When the host captured this. The widget extrapolates `elapsed` from it so the progress
     /// bar keeps moving between refreshes instead of freezing at the last polled value.
     var capturedAt: Date = .init(timeIntervalSince1970: 0)
+    /// Safari evidence expires when permission, tab, browser, or native messaging disappears.
+    var validUntil: Date? = nil
+
+    var supportsTransport: Bool { true }
+    var canGoNext: Bool? = nil
+    var canGoPrevious: Bool? = nil
 
     /// Whether the source switcher should currently be visible. Widgets have no hover state, so
     /// "reveal on interaction" is the closest achievable behaviour: the host sets this for a few
@@ -38,7 +44,7 @@ struct NowPlaying: Codable, Equatable {
     /// third-party marks can't be redistributed, and the widget stays visually consistent.
     var sourceSymbol: String {
         switch effectiveSource {
-        case "youtubeMusic": return "play.rectangle.fill"
+        case "youtubeMusic", "safariYouTube": return "play.rectangle.fill"
         case "spotify": return "waveform"
         case "appleMusic": return "music.note"
         default: return "sparkles"
@@ -50,6 +56,7 @@ struct NowPlaying: Codable, Equatable {
         let short: String
         switch effectiveSource {
         case "youtubeMusic": short = "YouTube Music"
+        case "safariYouTube": short = "Safari YouTube"
         case "spotify": short = "Spotify"
         case "appleMusic": short = "Apple Music"
         default: short = "No source"

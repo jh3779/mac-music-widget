@@ -1,0 +1,52 @@
+include:
+  - project.yml
+settings:
+  base:
+    CODE_SIGN_IDENTITY: Apple Development
+    CODE_SIGN_STYLE: Automatic
+    APP_GROUP_IDENTIFIER: group.com.jh3779.macmusicwidget
+    BUNDLE_ID_PREFIX: com.jh3779.macmusicwidget
+targets:
+  MacMusicWidgetHost:
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(BUNDLE_ID_PREFIX)
+    info:
+      path: Host/SafariInfo.plist
+      properties:
+        MediaAppGroup: $(APP_GROUP_IDENTIFIER)
+    entitlements:
+      path: Host/HostSafari.entitlements
+      properties:
+        com.apple.security.application-groups: [$(APP_GROUP_IDENTIFIER)]
+    dependencies:
+      - target: SafariWebExtension
+        embed: true
+  MacMusicWidgetExtension:
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(BUNDLE_ID_PREFIX).widget
+  SafariWebExtension:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: Safari
+        excludes: [Info.plist, Safari.entitlements]
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(BUNDLE_ID_PREFIX).safari
+        PRODUCT_NAME: SafariWebExtension
+    info:
+      path: Safari/Info.plist
+      properties:
+        CFBundleDisplayName: Safari YouTube Widget
+        MediaAppGroup: $(APP_GROUP_IDENTIFIER)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.Safari.web-extension
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).SafariWebExtensionHandler
+    entitlements:
+      path: Safari/Safari.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.application-groups: [$(APP_GROUP_IDENTIFIER)]

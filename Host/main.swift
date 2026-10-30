@@ -1,7 +1,8 @@
 import AppKit
 import WidgetKit
+import SafariServices
 
-/// Background host for the desktop widget.
+/// Background host for the Notification Center widget.
 ///
 /// It has no window at all — the widget *is* the UI. This process exists solely because a widget
 /// extension is sandboxed and cannot drive other apps over Apple Events.
@@ -13,7 +14,7 @@ final class HostDelegate: NSObject, NSApplicationDelegate {
     // Persisted: a source picked from the widget should survive a host restart.
     private var browser: Browser = {
         let saved = UserDefaults.standard.string(forKey: "browser").flatMap(Browser.init(rawValue:))
-        return (saved?.isInstalled == true ? saved : nil) ?? Browser.installed.first ?? .chrome
+        return (saved?.isInstalled == true ? saved : nil) ?? (Browser.safari.isInstalled ? .safari : Browser.installed.first) ?? .safari
     }()
     private var sourceKind: MusicSourceKind = {
         UserDefaults.standard.string(forKey: "sourceKind").flatMap(MusicSourceKind.init(rawValue:)) ?? .auto
@@ -24,7 +25,10 @@ final class HostDelegate: NSObject, NSApplicationDelegate {
     private var resolvedKind: MusicSourceKind = .auto
 
     private var state = NowPlaying.empty
-    private var lastPublished = NowPlaying.empty
+    private var reloadGate = WidgetReloadGate()
+    private var pollGeneration = 0
+    private var youtubePollInFlight = false
+    private var displayedSafari: WebMediaSnapshot?
     private var timer: Timer?
 
     /// Cover art for sources that hand over bytes (Apple Music), served over loopback.
@@ -41,8 +45,8 @@ final class HostDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
 
-        server.provideState = { [weak self] in self?.encodedState() ?? Data("{}".utf8) }
-        server.provideArtwork = { [weak self] in self?.artworkData }
+        server.provideState = { [weak self] in DispatchQueue.main.sync { self?.encodedState() ?? Data("{}".utf8) } }
+        server.provideArtwork = { [weak self] in DispatchQueue.main.sync { self?.artworkData } }
         server.handleCommand = { [weak self] command in
             DispatchQueue.main.async { self?.run(command) }
         }
@@ -60,7 +64,10 @@ final class HostDelegate: NSObject, NSApplicationDelegate {
     // MARK: Polling
 
     private func poll() {
+        pollGeneration += 1
         switch sourceKind {
+        case .safariYouTube:
+            finish(pollSafariYouTube(), from: .safariYouTube)
         case .spotify:
             finish(SpotifyController.poll(), from: .spotify)
         case .appleMusic:
@@ -75,6 +82,8 @@ final class HostDelegate: NSObject, NSApplicationDelegate {
     /// Prefers whatever is actually playing. Falls back to whatever merely has a track loaded, so
     /// a paused player still shows rather than the widget going blank.
     private func resolveAutomatically() {
+        let safari = pollSafariYouTube()
+        if safari.isPlaying { return finish(safari, from: .safariYouTube) }
         let spotify = SpotifyController.poll()
         if spotify.isPlaying { return finish(spotify, from: .spotify) }
 
@@ -85,15 +94,44 @@ final class HostDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             if youtube.isPlaying { return self.finish(youtube, from: .youtubeMusic) }
             // Nothing is playing anywhere — show the first source that at least has a track.
+            if safari.available { return self.finish(safari, from: .safariYouTube) }
             if spotify.available { return self.finish(spotify, from: .spotify) }
             if music.available { return self.finish(withAppleMusicArtwork(music), from: .appleMusic) }
             self.finish(youtube, from: .youtubeMusic)
         }
     }
 
+    private func pollSafariYouTube() -> SourceTrack {
+        var track = SourceTrack()
+        guard let store = WebMediaStore.configured() else {
+            track.note = "Safari App Group not configured"
+            return track
+        }
+        guard let snapshot = WebMediaSnapshot.select(store.snapshots()) else {
+            track.note = "Enable Safari extension and play a YouTube video"
+            displayedSafari = nil
+            return track
+        }
+        displayedSafari = snapshot
+        track.title = snapshot.title
+        track.artist = snapshot.author
+        track.artworkURL = snapshot.artworkURL
+        track.isPlaying = snapshot.isPlaying
+        track.available = true
+        track.validUntil = snapshot.expiresAt
+        track.canGoNext = snapshot.canGoNext
+        track.canGoPrevious = snapshot.canGoPrevious
+        return track
+    }
+
     private func pollYouTubeMusic(_ completion: @escaping (SourceTrack) -> Void) {
+        guard !youtubePollInFlight else { return }
+        youtubePollInFlight = true
+        let generation = pollGeneration
         bridge.poll(browser: browser) { [weak self] result in
             guard let self else { return }
+            self.youtubePollInFlight = false
+            guard generation == self.pollGeneration else { return }
             var track = SourceTrack()
             switch result {
             case .ok(let found):
@@ -169,6 +207,9 @@ final class HostDelegate: NSObject, NSApplicationDelegate {
         next.isPlaying = track.isPlaying
         next.elapsed = track.elapsed
         next.duration = track.duration
+        next.validUntil = track.validUntil
+        next.canGoNext = track.canGoNext
+        next.canGoPrevious = track.canGoPrevious
         next.hasTab = track.available
         next.statusNote = track.available ? "" : (track.note.isEmpty ? "Nothing playing" : track.note)
         next.capturedAt = Date()
@@ -190,20 +231,8 @@ final class HostDelegate: NSObject, NSApplicationDelegate {
     /// Widget reloads are a limited resource, so only ask for one when something a viewer would
     /// notice actually changed — not on every poll tick.
     private func publishIfChanged(_ next: NowPlaying) {
-        let worthReloading =
-            next.title != lastPublished.title
-            || next.artist != lastPublished.artist
-            || next.isPlaying != lastPublished.isPlaying
-            || next.hasTab != lastPublished.hasTab
-            || next.statusNote != lastPublished.statusNote
-            || next.sourceSelection != lastPublished.sourceSelection
-            || next.sourceActive != lastPublished.sourceActive
-            || next.showSourceButton != lastPublished.showSourceButton
-            || abs(next.elapsed - lastPublished.elapsed) > 12
-
-        guard worthReloading else { return }
-        lastPublished = next
-        WidgetCenter.shared.reloadAllTimelines()
+        guard reloadGate.shouldReload(next) else { return }
+        WidgetCenter.shared.reloadTimelines(ofKind: "MacMusicWidget")
     }
 
     // MARK: Commands
@@ -232,6 +261,8 @@ final class HostDelegate: NSObject, NSApplicationDelegate {
         }
 
         switch resolvedKind {
+        case .safariYouTube:
+            if let action = SafariCommand.Action(rawValue: command.rawValue) { sendSafari(action) }
         case .spotify:
             SpotifyController.command(command)
         case .appleMusic:
@@ -249,8 +280,16 @@ final class HostDelegate: NSObject, NSApplicationDelegate {
 
     /// Pauses whichever source is currently on screen. Safe to call unconditionally — every
     /// backend uses a real pause rather than a toggle, so pausing an idle player does nothing.
+    private func sendSafari(_ action: SafariCommand.Action) {
+        // Address the exact document that supplied the displayed state, never the frontmost tab.
+        guard let snapshot = displayedSafari, let store = WebMediaStore.configured() else { return }
+        do { try store.enqueue(action, for: snapshot) }
+        catch { Log.write("Safari command unavailable; metadata may have expired") }
+    }
+
     private func pauseCurrentSource() {
         switch resolvedKind {
+        case .safariYouTube: sendSafari(.pause)
         case .spotify: SpotifyController.pause()
         case .appleMusic: AppleMusicController.pause()
         case .youtubeMusic, .auto: bridge.pause(browser: browser)
@@ -288,6 +327,10 @@ final class HostDelegate: NSObject, NSApplicationDelegate {
         }
 
         menu.addItem(.separator())
+        if Bundle.main.object(forInfoDictionaryKey: "MediaAppGroup") != nil {
+            menu.addItem(withTitle: "Safari Extension Settings…", action: #selector(openSafariSettings), keyEquivalent: "").target = self
+            menu.addItem(.separator())
+        }
         menu.addItem(withTitle: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         item.menu = menu
         statusItem = item
@@ -308,6 +351,11 @@ final class HostDelegate: NSObject, NSApplicationDelegate {
                 entry.state = (candidate == browser) ? .on : .off
             }
         }
+    }
+
+    @objc private func openSafariSettings() {
+        guard let identifier = Bundle.main.bundleIdentifier else { return }
+        SFSafariApplication.showPreferencesForExtension(withIdentifier: identifier + ".safari") { _ in }
     }
 
     @objc private func selectSource(_ sender: NSMenuItem) {
