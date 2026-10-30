@@ -54,12 +54,13 @@ function content(music = false) {
   const title = { textContent: 'Song' };
   const bar = { querySelector(selector) { return { '.title': title, '.byline': { textContent: 'Artist • Album' }, img: { src: 'https://lh3.googleusercontent.com/cover=w60-h60' }, '.next-button': next, '.previous-button': previous }[selector]; } };
   const location = { href: music ? 'https://music.youtube.com/' : url };
+  const unrelatedVideo = { readyState: 0, paused: true };
   let uuid = 0;
   const ctx = vm.createContext({ URL, Date, location, crypto: { randomUUID: () => uuid++ === 0 ? documentID : `00000000-0000-4000-8000-${String(uuid).padStart(12, '0')}` },
     setTimeout(fn) { return 1; }, setInterval(fn) { heartbeat = fn; },
     MutationObserver: class { observe() {} },
     window: { addEventListener(name, fn) { events[name] = fn; } },
-    document: { documentElement: {}, querySelector(selector) { return { 'ytd-watch-flexy': page, '#movie_player': player, 'ytmusic-player-bar': bar, video }[selector]; }, addEventListener(name, fn) { events[name] = fn; } },
+    document: { documentElement: {}, querySelector(selector) { return { 'ytd-watch-flexy': page, '#movie_player': player, 'ytmusic-player-bar': bar, video: music ? unrelatedVideo : video }[selector]; }, addEventListener(name, fn) { events[name] = fn; } },
     browser: { runtime: { async sendMessage(value) { sent.push(value); return { ok: true }; }, onMessage: { addListener(fn) { listener = fn; } } } }
   });
   load('media', ctx); load('content', ctx);

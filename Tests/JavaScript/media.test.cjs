@@ -7,6 +7,13 @@ function api() {
   vm.runInContext(fs.readFileSync('Safari/Resources/media.js', 'utf8'), context, { filename: require('node:path').resolve('Safari/Resources/media.js') });
   return context.MediaMetadata;
 }
+test('the helper does not replace the browser MediaMetadata API', () => {
+  const original = class MediaMetadata {};
+  const context = vm.createContext({ URL, MediaMetadata: original });
+  vm.runInContext(fs.readFileSync('Safari/Resources/media.js', 'utf8'), context);
+  assert.equal(context.MediaMetadata, original);
+  assert.equal(typeof context.MacMusicWidgetMedia.musicSnapshot, 'function');
+});
 test('only regular YouTube watch URLs are eligible', () => {
   const m = api();
   assert.equal(m.videoID('https://www.youtube.com/watch?v=dQw4w9WgXcQ'), 'dQw4w9WgXcQ');
