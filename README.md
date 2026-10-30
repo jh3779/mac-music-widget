@@ -1,118 +1,152 @@
 <div align="center">
-
 <img src="Resources/AppIcon.svg" width="96" alt="Mac Music Widget">
 
-# Mac Music Widget
+# Mac Music Widget — Safari YouTube
 
-**A real macOS desktop widget for Apple Music, Spotify and YouTube Music.**
+**macOS 우측 알림 센터의 정식 WidgetKit 위젯.**
 
-Not a floating window pretending to be a widget — an actual WidgetKit widget you add
-from the desktop widget gallery, with working playback controls.
+Safari YouTube의 **썸네일·제목·재생/일시정지·이전·다음**을 표시합니다.
+영상은 Safari에서 재생하며 위젯 안에는 영상 플레이어를 넣지 않습니다.
 
-Built by **[Ignacio Martin Vazquez](https://github.com/ignasave)** · MIT licensed
+원작: **[Ignacio Martin Vazquez](https://github.com/ignasave)** · [MIT 라이선스](LICENSE)
 
 </div>
 
----
+> 개발 중인 MVP입니다. Swift/JavaScript 자동 테스트와 Xcode 빌드는 검증했습니다.
+> 서명된 Safari 확장 설치, 실제 YouTube와 알림 센터의 전체 동작은 아직 검증하지 않았습니다.
+> [검증 결과와 미확인 항목](docs/testing/safari-mvp.md)을 먼저 확인하세요.
 
-## What it does
+## 범위
 
-- Shows what's playing — cover art, title, artist, progress
-- **Working transport controls** — previous / play-pause / next, right in the widget
-- **Three sources**: Apple Music, Spotify, YouTube Music (in any browser)
-- **Auto-detect** — follows whichever player is actually playing
-- Switching sources pauses the one you're leaving
-- Small and medium widget sizes
+- **Safari 일반 YouTube 영상**: `https://www.youtube.com/watch?v=…`의 제목, 썸네일, 재생/일시정지 상태.
+- **재생 제어**: 열려 있는 해당 Safari 탭만 조작합니다. 이전/다음은 YouTube 플레이어의 버튼이 사용 가능할 때만 활성화됩니다. 이전 버튼이 없는 일반 영상에서는 이전 이동을 제공하지 않습니다.
+- **기존 음악 지원 유지**: Spotify, Apple Music, YouTube Music의 읽기·제어 경로를 보존했습니다. 기존 음악 앱과의 실제 회귀 확인은 수동 검증 항목입니다.
+- **Instagram 제외**: 게시물, 릴스, 임베드, 하위 도메인에 접근하거나 메타데이터를 수집하지 않습니다. YouTube 최상위 페이지에만 확장 권한을 요청합니다.
+- 광고 재생 중, Shorts, 다른 사이트의 YouTube 임베드, 비공개 브라우징은 MVP 지원 범위 밖입니다.
+- 다른 스트리밍 사이트는 사이트별 메타데이터·권한·DRM 검증 후 확장합니다. 범용 스트리밍 지원으로 간주하지 마세요.
+- Small/Medium 크기를 지원합니다. 플로팅 창·노치 UI·화면 캡처는 없습니다.
 
-## Install
+## 설치: Safari 확장 포함 빌드
+
+macOS 14+, Xcode, [XcodeGen](https://github.com/yonaskolb/XcodeGen)이 필요합니다.
+Safari 17+를 기준으로 작성했습니다. Safari 확장과 호스트의 App Group 공유에는 적절한 Apple 서명과 entitlement 설정이 필요합니다.
 
 ```bash
-git clone https://github.com/ignasave/mac-music-widget.git
+git clone https://github.com/jh3779/mac-music-widget.git
 cd mac-music-widget
-./build.sh --install
+git switch feat/safari-youtube-notification-widget
+brew install xcodegen
+xcodegen generate --spec project-safari.yml
+open MacMusicWidget.xcodeproj
 ```
 
-Then **right-click the desktop → Edit Widgets**, search *Mac Music Widget*, and drag it out.
+### Xcode 설정
 
-A prebuilt app is attached to the [latest release](https://github.com/ignasave/mac-music-widget/releases)
-if you'd rather not build it.
+1. 프로젝트의 `BUNDLE_ID_PREFIX`를 자신이 사용할 고유한 reverse-DNS 식별자로 바꿉니다. 예: `com.yourname.macmusicwidget`.
+2. 세 타깃 `MacMusicWidgetHost`, `MacMusicWidgetExtension`, `SafariWebExtension`에 **같은 개발 Team**을 지정합니다. Automatic Signing을 사용합니다.
+3. 호스트와 Safari 확장의 **Signing & Capabilities → App Groups**에 같은 그룹을 추가합니다. 권장 형식은 본인의 계정에 등록한 `group.<고유이름>`입니다.
+4. 프로젝트 Build Settings의 `APP_GROUP_IDENTIFIER`를 그 값으로 바꿉니다. 호스트와 Safari 확장의 `MediaAppGroup` Info.plist 값 및 entitlement가 모두 이 설정을 참조합니다. 기본 `group.com.jh3779.macmusicwidget`을 다른 계정에서 그대로 사용하지 마세요.
+5. `MacMusicWidgetHost` 스킴으로 빌드하고 실행합니다. 호스트 안에 WidgetKit 및 Safari 확장이 함께 포함됩니다.
+6. 재생성하면 Xcode에서 직접 수정한 설정이 사라질 수 있습니다. 지속할 설정은 로컬 `project-safari.yml`이나 아래 명령의 환경값에 반영하세요. 개인 Team/프로필 파일을 PR에 커밋할 필요는 없습니다.
 
-Requires macOS 14+, and Xcode plus [XcodeGen](https://github.com/yonaskolb/XcodeGen)
-(`brew install xcodegen`) to build from source.
+권장 `group.` 방식에는 해당 그룹이 포함된 프로비저닝 프로필이 필요합니다.
+macOS는 `TEAMID.<group name>` 형식도 지원하지만 제약이 다릅니다. 서명 없이 App Group을 쓸 수 있다고 가정하지 마세요.
+[Apple의 App Group 설정 문서](https://developer.apple.com/documentation/xcode/accessing-app-group-containers)를 참고하세요.
 
-### First run
+설정이 준비됐다면 명령으로 빌드할 수도 있습니다. 다음 값은 예시이며 실제 값으로 교체해야 합니다.
 
-1. Approve the **Automation** prompt the first time it reads a player.
-2. **YouTube Music only** — enable *Allow JavaScript from Apple Events*:
-   Chrome → **View → Developer**, Safari → **Develop**. Apple Music and Spotify need nothing.
+```bash
+DEVELOPMENT_TEAM=YOURTEAMID \
+APP_GROUP_IDENTIFIER=group.com.yourname.macmusicwidget \
+BUNDLE_ID_PREFIX=com.yourname.macmusicwidget \
+./build.sh --safari
+```
 
-The host app runs in the background with a music-note menu bar icon: source picker,
-browser picker, and Quit.
+앱은 `build/Mac Music Widget.app`에 생성됩니다. Finder로 `/Applications`에 복사하고 실행하세요.
+`./build.sh --safari --install`은 기존 `/Applications/Mac Music Widget.app`을 교체하므로 기존 설치를 보관하려면 먼저 다른 곳에 복사하세요.
+이 작업에서는 앱 설치나 사용자 Safari 설정 변경을 실행하지 않았습니다.
 
-## How it works
+### Safari 권한
 
-A widget extension is **sandboxed and cannot send Apple Events**, so it can't read a music
-player at all. That single constraint dictates the whole architecture:
+1. Safari → **설정 → 확장 프로그램**에서 **Mac Music Widget — Safari YouTube**를 켭니다.
+2. `youtube.com` 접근을 명시적으로 허용합니다. 확장이 보이지 않으면 앱을 실행한 뒤 메뉴 막대의 음표 → **Safari Extension Settings…**를 선택합니다.
+3. 이미 열린 YouTube 탭을 새로고침한 뒤 일반 영상을 한 번 직접 재생합니다.
+4. 확장 툴바 팝업에서 Native bridge 상태를 확인합니다. 정상 표시는 네이티브 연결 확인이며, 호스트 실행이나 위젯 표시까지 검증한 것은 아닙니다.
+5. 일반 영상 경로는 **Allow JavaScript from Apple Events가 필요하지 않습니다**. 이 설정은 기존 YouTube Music AppleScript 경로에만 필요합니다.
 
-- **`MacMusicWidgetHost`** — a normal background app (`LSUIElement`, no Dock icon). The only
-  process that talks to music players.
-- **`MacMusicWidgetExtension`** — the widget. It renders, and nothing else.
+개발용 서명 방식에 따라 Safari의 개발 메뉴에서 **Allow Unsigned Extensions**를 켜야 할 수 있습니다.
+이 옵션만으로 잘못된 App Group 서명이 해결되지는 않습니다. 실제 사용자 동의는 앱이 대신 설정하지 않습니다.
 
-They communicate over **loopback HTTP on `127.0.0.1:47893`**:
+### 알림 센터에 추가
 
-| Route | Purpose |
-|---|---|
-| `GET /state` | Current track as JSON |
-| `GET /artwork` | Cover art for players that hand over bytes instead of a URL |
-| `POST /cmd/{playPause,next,previous,cycleSource}` | Widget button → host drives the player |
+메뉴 막대 오른쪽 **날짜·시간 클릭 → 알림 센터 맨 아래 ‘위젯 편집’ → Mac Music Widget → Small 또는 Medium 추가**.
+호스트는 음표 아이콘이 있는 백그라운드 앱으로 계속 실행되어야 합니다.
+소스 메뉴에서 **Safari YouTube**를 고르면 다른 음악 앱의 Automation 권한 없이 일반 YouTube 경로를 확인할 수 있습니다.
+`Auto`는 재생 중인 Safari YouTube → Spotify → Apple Music → YouTube Music 순으로 선택합니다.
+여러 YouTube 탭은 재생 중인 탭을 우선하고, 같은 상태에서는 마지막으로 영상/재생 상태가 바뀐 탭을 고릅니다. 단순 heartbeat는 선택을 빼앗지 않습니다.
 
-Loopback rather than the conventional **App Group**, because App Group entitlements must be
-validated by a provisioning profile — this way the whole project stays ad-hoc signed and builds
-on any machine with Xcode. The extension only needs `com.apple.security.network.client`, and
-binding with `requiredInterfaceType = .loopback` keeps the server off the network.
+macOS는 같은 WidgetKit 위젯을 바탕화면에도 추가할 수 있습니다. 이 프로젝트의 설치 및 검증 대상은 **우측 알림 센터**입니다.
 
-### Reading the players
+## 기존 음악 전용 빌드
 
-| Source | Method | Notes |
-|---|---|---|
-| **Apple Music** | Native AppleScript dictionary | Artwork arrives as `raw data`, not a URL — normalised to PNG and served from `/artwork`. Catalog tracks expose none, so a cover is looked up via the public iTunes Search API |
-| **Spotify** | Native AppleScript dictionary | Reports duration in **milliseconds**, unlike the others |
-| **YouTube Music** | AppleScript → JavaScript in a browser tab | The fragile one; depends on YouTube's player DOM |
+```bash
+./build.sh
+```
 
-Apple Music and Spotify are officially scriptable. The YouTube Music path injects JavaScript and
-will break whenever Google reshuffles the player.
+이 기본 구성(`project.yml`)은 원본처럼 ad-hoc 서명과 로컬 통신을 사용하며 **Safari 일반 영상 확장은 포함하지 않습니다**.
+새 Safari 기능에는 위의 `--safari` 구성이 필요합니다.
 
-## Things learned the hard way
+- Apple Music·Spotify: 최초 Automation 요청을 허용합니다.
+- YouTube Music: 소스와 브라우저를 선택하고 해당 브라우저의 **Allow JavaScript from Apple Events**를 켭니다.
+- Safari가 설치돼 있으면 최초 브라우저 선택 기본값으로 사용합니다. 저장된 선택은 유지합니다.
+- 원본 호스트와 이 포크를 동시에 실행하면 로컬 포트 `47893`이 충돌합니다. 하나만 실행하세요.
 
-Documented because none of them are obvious, and each cost real debugging time:
+## 갱신 및 제어 한계
 
-- **Chromium's scripting command is `execute <tab> javascript "…"`.** Writing Safari's
-  `… "…" in <tab>` form parses as `get "…" in <tab>` and fails with a misleading
-  `-1723 Access not allowed`, which looks exactly like a permissions problem.
-- **A widget renders once.** Fetching an image with `.task` inside the view never appears —
-  artwork has to be resolved in the `TimelineProvider`, before the entry exists.
-- **Widget layout must not be sized by its content.** The artwork box uses `Color.clear` as its
-  sizing anchor with the cover drawn as an overlay; otherwise the row visibly shifts when an
-  asynchronously-fetched cover lands.
-- **AppleScript renders absent properties as the literal text `"missing value"`.** It is not data.
-- **Live radio genuinely has no duration or position** — it gets a LIVE badge instead of a
-  progress bar pinned at zero.
-- **Widgets have no hover state.** The source switcher reveals for 12 s after any button press,
-  because that's the closest achievable behaviour.
+- 확장은 변경 이벤트와 약 2초 간격의 heartbeat로 메타데이터를 전달합니다. 호스트도 약 2초 간격으로 읽습니다. Safari가 탭을 절전·중지하면 길어질 수 있습니다.
+- **이 간격이 화면 갱신 주기는 아닙니다.** 호스트는 일반 갱신 요청을 최소 30초 간격으로 묶지만, 실제 위젯 갱신은 macOS가 지연하거나 생략할 수 있습니다. 제목·썸네일·상태가 즉시 따라오는 실시간 플레이어로 보장하지 않습니다.
+- 제어 직후 상태 변경에는 추가 갱신을 요청합니다. 버튼 명령은 다음 heartbeat에 전달되며, 8초가 지나면 폐기됩니다. 빠르게 여러 번 누르면 마지막 명령으로 합쳐질 수 있습니다. 성공 응답/재시도 보장은 없으며, 실제 상태 변화를 확인해야 합니다.
+- 위젯에 보이던 문서·영상이 호스트의 현재 대상과 다르면 조작을 거절합니다. 갱신 전의 오래된 버튼이 다른 영상을 조작하지 않습니다.
+- 45초 동안 새 정보가 없으면 호스트가 해당 데이터를 제외합니다. 위젯에도 미리 만료 엔트리를 제공하지만 시스템 렌더링 시점까지 오래된 내용이 잠시 보일 수 있습니다.
+- Safari의 자동재생 정책 때문에 `play()`가 거절될 수 있습니다. 이때 Safari에서 직접 재생한 후 다시 확인하세요.
+- CDN에서 썸네일을 제공하지 않는 영상이나 네트워크 오류는 기본 이미지로 표시됩니다. 로그인·DRM·지역 제한을 우회하지 않습니다.
 
-## Layout
+Apple은 일반적으로 자주 보는 위젯에 하루 40–70회의 갱신 예산을 설명하며, 정확한 간격은 사용 패턴과 시스템 조건에 따라 달라집니다.
+[WidgetKit 갱신 문서](https://developer.apple.com/documentation/widgetkit/keeping-a-widget-up-to-date)
 
-| Path | Purpose |
-|---|---|
-| `Shared/NowPlaying.swift` | State contract + loopback endpoints, compiled into both targets |
-| `Host/main.swift` | Poll loop, source resolution, command dispatch, reload policy |
-| `Host/MusicSources.swift` | Apple Music and Spotify AppleScript adapters |
-| `Host/Bridge.swift` | Browser AppleScript + JavaScript bridge |
-| `Host/HTTPServer.swift` | Loopback server (`Network` framework, no dependencies) |
-| `Widget/MusicWidget.swift` | Timeline provider, `AppIntent` buttons, layouts |
-| `project.yml` | XcodeGen input — a widget extension can't be built by SwiftPM |
+## 데이터 흐름과 개인정보
 
-## License
+```text
+허용된 Safari YouTube 탭
+  → content script → background → Safari native extension
+  → App Group: 프로필/탭별 최신 스냅샷
+  → Host 앱: 소스 선택 및 갱신 요청
+  → 127.0.0.1:47893 → WidgetKit Timeline → 알림 센터
 
-[MIT](LICENSE) © [Ignacio Martin Vazquez](https://github.com/ignasave) — free to use, modify and
-ship, commercially or otherwise. Keeping the copyright line is all that's asked.
+위젯 버튼 → Host → App Group의 짧은 수명 명령
+  → 다음 native 응답 → 정확한 문서/영상이 일치하는 Safari 탭
+```
+
+확장은 제목·채널·영상 ID·재생 상태·버튼 가능 여부·무작위 문서 ID만 공유합니다. 쿠키, 로그인 정보, 전체 방문 URL, 영상 바이트를 수집하지 않습니다.
+썸네일은 검증된 영상 ID로 만든 `i.ytimg.com` HTTPS 주소에서 위젯이 가져옵니다. Instagram 수집 경로와 화면 캡처 코드는 없습니다.
+로컬 App Group에는 각 탭의 최신 스냅샷만 저장합니다. 닫힘 이벤트로 제거하고, 새 데이터 수신 시 만료 스냅샷을 정리합니다. 강제 종료·권한 철회 후 수신이 완전히 끊기면 이전 파일이 디스크에 남을 수 있으나 만료 데이터는 표시 대상으로 선택하지 않습니다.
+로컬 HTTP는 웹 Origin/Referer 요청, 잘못된 Host 및 GET 제어를 거절합니다. 같은 사용자 권한의 로컬 프로세스에 대한 인증 경계는 아니며, 원본의 loopback 구조를 유지합니다.
+
+## 검증
+
+```bash
+swift test --enable-code-coverage
+node --test Tests/JavaScript/*.test.cjs
+xcodegen generate --spec project-safari.yml
+xcodebuild -project MacMusicWidget.xcodeproj -scheme MacMusicWidgetHost \
+  -configuration Debug -derivedDataPath .build/xcode-safari CODE_SIGNING_ALLOWED=NO build
+```
+
+마지막 명령은 **서명 없는 컴파일 검증**입니다. 실행 가능한 Safari 배포본을 보증하지 않습니다.
+자동 테스트, 전체 수동 검증표, 현재 결과는 [검증 문서](docs/testing/safari-mvp.md)에 있습니다.
+접근법 비교(시스템 Now Playing, 비공개 API, Safari 확장, AppleScript)와 원본 분석은 [아키텍처 문서](docs/architecture.md)를 참고하세요.
+
+## 라이선스
+
+[MIT](LICENSE) © 2026 [Ignacio Martin Vazquez](https://github.com/ignasave).
+원본 LICENSE 전체와 저작권 고지를 유지합니다. [원본 저장소](https://github.com/ignasave/mac-music-widget)의 README도 [별도 보관](docs/upstream-README.md)했습니다.
