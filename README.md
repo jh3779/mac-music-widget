@@ -35,10 +35,16 @@ Safari 17+를 기준으로 작성했습니다. Safari 확장과 호스트의 App
 ```bash
 git clone https://github.com/jh3779/mac-music-widget.git
 cd mac-music-widget
-git switch feat/safari-youtube-notification-widget
 brew install xcodegen
 xcodegen generate --spec project-safari.yml
 open MacMusicWidget.xcodeproj
+```
+
+위 절차는 기본 브랜치에 병합된 버전을 설치합니다. 병합 전에 PR #1을 시험하려면 프로젝트 생성 전에 다음을 실행하세요. 작업 브랜치를 삭제해도 이 설치 절차는 유지됩니다.
+
+```bash
+git fetch origin refs/pull/1/head
+git switch --detach FETCH_HEAD
 ```
 
 ### Xcode 설정
