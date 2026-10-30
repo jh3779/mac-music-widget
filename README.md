@@ -12,8 +12,8 @@ Safari YouTube의 **썸네일·제목·재생/일시정지·이전·다음**을 
 
 </div>
 
-> 개발 중인 MVP입니다. 자동 테스트, 서명된 1.2.1 앱 설치와 Safari의 실제 YouTube Music → 호스트 전달을 확인했습니다.
-> 일반 YouTube 영상, 알림 센터 화면과 실제 재생 버튼의 전체 동작 검증은 남아 있습니다.
+> 개발 중인 MVP입니다. 자동 테스트 28개, 서명된 1.2.2 앱 설치, 실제 YouTube Music 정보 전달과 재생/일시정지 명령을 확인했습니다. 알림 센터의 제목·이미지 표시는 사용자가 확인했습니다.
+> 일반 YouTube 영상의 실제 재생, 이전/다음 및 음악 앱 전체 회귀 검증은 남아 있습니다.
 > [검증 결과와 미확인 항목](docs/testing/safari-mvp.md)을 먼저 확인하세요.
 
 ## 범위
@@ -64,14 +64,14 @@ BUNDLE_ID_PREFIX=com.yourname.macmusicwidget \
 
 앱은 `build/Mac Music Widget.app`에 생성됩니다. Finder로 `/Applications`에 복사하고 실행하세요.
 `./build.sh --safari --install`은 기존 `/Applications/Mac Music Widget.app`을 교체하므로 기존 설치를 보관하려면 먼저 다른 곳에 복사하세요.
-1.2.1은 이 작업의 Mac에서 `/Applications/Mac Music Widget.app`에 설치하고 실행했습니다. 개인 개발 서명이며 공증된 일반 배포 릴리스가 아닙니다. 다른 Mac의 설치·실행을 보증하지 않습니다. 앱 리소스에도 원본 MIT LICENSE를 포함합니다.
+1.2.2는 이 작업의 Mac에서 `/Applications/Mac Music Widget.app`에 설치하고 실행했습니다. 개인 개발 서명이며 공증된 일반 배포 릴리스가 아닙니다. 다른 Mac의 설치·실행을 보증하지 않습니다. 앱 리소스에도 원본 MIT LICENSE를 포함합니다.
 
 ### Safari 권한
 
 1. Safari → **설정 → 확장 프로그램**에서 **Mac Music Widget — Safari YouTube**를 켭니다.
 2. `www.youtube.com`과 `music.youtube.com` 접근을 명시적으로 허용합니다. Safari는 권한 목록에서 둘을 `youtube.com`으로 묶어 표시할 수 있습니다. 실제 확장의 접근 대상은 이 두 호스트뿐입니다. 확장이 보이지 않으면 앱을 실행한 뒤 메뉴 막대의 음표 → **Safari Extension Settings…**를 선택합니다.
 3. 설치·업데이트 후에는 이미 열린 YouTube/YouTube Music 탭을 한 번 새로고침하고 직접 재생합니다. Safari가 업데이트 전 content script의 연결을 끊을 수 있습니다.
-4. 확장 툴바 팝업에서 Native bridge 상태를 확인합니다. 정상 표시는 네이티브 연결 확인이며, 호스트 실행이나 위젯 표시까지 검증한 것은 아닙니다.
+4. 확장 툴바 팝업에서 Native bridge와 페이지 수신 상태를 확인합니다. `Player metadata received`가 보여야 페이지 데이터도 들어오는 상태입니다. 네이티브 연결 정상만으로 실제 페이지 수신·위젯 표시를 보증하지 않습니다. 팝업의 마지막 수신 상태는 브라우저가 background script를 다시 시작하면 초기화될 수 있습니다.
 5. 이 Safari 확장을 사용하는 일반 영상 및 YouTube Music 경로는 **Allow JavaScript from Apple Events가 필요하지 않습니다**. 이 설정은 음악 전용 빌드의 기존 Safari AppleScript 경로에만 필요합니다.
 
 이 작업의 설치본은 **Allow Unsigned Extensions를 켜지 않고** 활성화했습니다. 설정이 필요한지 먼저 서명을 확인하세요. Safari 확장과 웹사이트 접근은 사용자 동의가 필요합니다. 개인정보 보호 브라우징 접근은 요청하거나 활성화하지 않습니다.

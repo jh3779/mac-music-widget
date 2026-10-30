@@ -1,5 +1,5 @@
 /* Shared by the isolated content script and extension background page. */
-globalThis.MediaMetadata = Object.freeze({
+globalThis.MacMusicWidgetMedia = Object.freeze({
   isMusicURL(rawURL) {
     try { return new URL(rawURL).origin === 'https://music.youtube.com'; } catch { return false; }
   },

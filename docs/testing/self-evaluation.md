@@ -1,17 +1,18 @@
 # Delivery self-evaluation
 
-Overall: **3.6/5**. Reviewable implementation and repeatable build/test evidence; signed end-to-end acceptance remains outstanding.
+Overall: **3.8/5**. Installed, permissioned and verified with real YouTube Music; general-video and broader regression acceptance remain explicitly open.
 
 | Axis | Score | Evidence and improvement |
 |---|---:|---|
-| Accuracy | 4 | Tests and both builds passed; signed Safari/WidgetKit behavior is explicitly not claimed. Verify that behavior on a configured Mac. |
-| Completeness | 3 | Fork, implementation, controls, Instagram exclusion, source preservation and docs are present. Live Safari/App Group and music regressions remain untested. Complete the manual matrix before promoting from draft. |
-| Clarity | 4 | README separates Safari signing from the existing ad-hoc build, and distinguishes poll/reload/render timing. The setup is necessarily lengthy; screenshots from real installation would help. |
-| Actionability | 3 | Code and concrete build/verification commands are ready for review. Lack of a signing identity/App Group prevents a ready-to-install Safari build in this session. Configure signing and run the matrix next. |
-| Conciseness | 4 | Details reside in repository docs and test evidence. Architecture and README repeat the core refresh limitation so installation readers do not miss it. |
+| Accuracy | 4 | Thirteen Swift and fifteen JS tests pass, signed 1.2.2 builds and verifies, the user confirms Notification Center title/artwork, and a live pause/resume transport test restores playback. Direct AppIntent UI clicks and five-minute display timing are not claimed. |
+| Completeness | 3 | Fork, code, signed installation, allowed www/music Safari access, Instagram exclusion, download and PR are supplied. Regular YouTube live acceptance, previous/next and Spotify/Apple Music regressions remain to be run. |
+| Clarity | 4 | README distinguishes browser metadata lifetime, display freshness and system scheduling; popup now distinguishes native readiness from page delivery. Some diagnostic text remains English. |
+| Actionability | 4 | The app is installed and the downloadable archive contains the signed app and MIT notice. It is a personal development build; distribution to other Macs still needs an appropriate signing/notarization plan. |
+| Conciseness | 4 | User-facing results are brief; architecture and evidence stay in repository docs. The installation involved multiple corrections, recorded as evidence instead of hidden. |
 
-Critical issues (score ≤2): none.
+Improvements, in impact order:
+1. Complete real regular-video, previous/next and native music-source regressions; promote the draft only after recording them.
+2. Observe Notification Center visible/hidden behavior for longer than five minutes, including manual refresh and direct AppIntent clicks.
+3. Localize setup/diagnostic messages consistently after the runtime acceptance matrix is complete.
 
-Top improvements: (1) signed Safari → host → Notification Center acceptance with real YouTube and Instagram exclusion, (2) live regression checks for the three preserved music sources.
-
-Self-check: the user should expect a draft development result, not a verified installable Safari release. Deliver as a draft PR with this boundary visible.
+Self-check: the user can use the installed Music widget now and has confirmed its title/artwork. The remaining checks are specific and visible; a universal streaming or instant-update claim would be inaccurate.

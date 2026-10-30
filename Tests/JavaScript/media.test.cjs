@@ -5,7 +5,7 @@ const vm = require('node:vm');
 function api() {
   const context = vm.createContext({ URL });
   vm.runInContext(fs.readFileSync('Safari/Resources/media.js', 'utf8'), context, { filename: require('node:path').resolve('Safari/Resources/media.js') });
-  return context.MediaMetadata;
+  return context.MacMusicWidgetMedia;
 }
 test('the helper does not replace the browser MediaMetadata API', () => {
   const original = class MediaMetadata {};

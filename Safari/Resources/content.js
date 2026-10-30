@@ -8,18 +8,20 @@
   let lastSentAt = 0;
   let scheduled;
   let navigating = false;
+  let readNote = '';
   function read() {
-    if (MediaMetadata.isMusicURL(location.href)) {
+    readNote = '';
+    if (MacMusicWidgetMedia.isMusicURL(location.href)) {
       const bar = document.querySelector('ytmusic-player-bar');
-      const video = document.querySelector('video');
       const player = document.querySelector('#movie_player');
-      if (!bar || !video) return null;
-      const snapshot = MediaMetadata.musicSnapshot({ url: location.href,
+      const video = player?.querySelector('video') || document.querySelector('video');
+      if (!bar || !video) { readNote = 'Music player not found'; return null; }
+      const snapshot = MacMusicWidgetMedia.musicSnapshot({ url: location.href,
         title: bar.querySelector('.title')?.textContent, author: bar.querySelector('.byline')?.textContent,
         artworkURL: bar.querySelector('img')?.src, paused: video.paused, ended: video.ended,
         readyState: video.readyState, ad: !!player?.classList.contains('ad-showing'),
         canGoNext: enabled(bar.querySelector('.next-button')), canGoPrevious: enabled(bar.querySelector('.previous-button')) });
-      if (!snapshot) return null;
+      if (!snapshot) { readNote = `Music metadata unavailable (ready=${video.readyState})`; return null; }
       const key = JSON.stringify([snapshot.title, snapshot.author, snapshot.artworkURL]);
       if (key !== musicKey) { musicKey = key; musicID = crypto.randomUUID(); }
       return { ...snapshot, videoID: musicID };
@@ -27,8 +29,8 @@
     const page = document.querySelector('ytd-watch-flexy');
     const player = document.querySelector('#movie_player');
     const video = player?.querySelector('video');
-    if (navigating || !page || !video) return null;
-    return MediaMetadata.snapshot({
+    if (navigating || !page || !video) { readNote = 'Open a regular YouTube watch page'; return null; }
+    return MacMusicWidgetMedia.snapshot({
       url: location.href,
       pageVideoID: page.getAttribute('video-id'),
       title: page.querySelector('#title h1, h1.ytd-watch-metadata')?.textContent,
@@ -40,13 +42,14 @@
     });
   }
   async function publish(force = false) {
-    const snapshot = read();
+    let snapshot = null;
+    try { snapshot = read(); } catch { readNote = 'Page adapter could not read the player'; }
     const signature = JSON.stringify(snapshot);
     if (!force && signature === lastSignature && Date.now() - lastSentAt < 2000) return;
     lastSignature = signature;
     lastSentAt = Date.now();
     try {
-      const response = await browser.runtime.sendMessage({ kind: 'snapshot', snapshot: snapshot ? { ...snapshot, documentID } : null });
+      const response = await browser.runtime.sendMessage({ kind: 'snapshot', snapshot: snapshot ? { ...snapshot, documentID } : null, diagnostic: readNote });
       if (!response?.ok) lastSignature = ''; // Retry on the next observation/heartbeat.
     } catch { lastSignature = ''; }
   }
@@ -75,7 +78,7 @@
     lastCommandID = command.id;
     const isMusic = snapshot.source === 'youtubeMusic';
     const player = document.querySelector(isMusic ? 'ytmusic-player-bar' : '#movie_player');
-    const video = isMusic ? document.querySelector('video') : player?.querySelector('video');
+    const video = isMusic ? (document.querySelector('#movie_player')?.querySelector('video') || document.querySelector('video')) : player?.querySelector('video');
     try {
       if (command.action === 'playPause') {
         if (video.paused) await video.play(); else video.pause();

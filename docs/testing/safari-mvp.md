@@ -20,15 +20,16 @@ Environment: Apple Silicon Mac, Xcode 27.1 (`27A9275`), Apple Swift 6.4 compiler
 | Music metadata on URLs without a watch ID; CDN boundaries and old-song commands | Native Music test + Music content/background fixtures | PASS |
 | Short browser lease does not erase display; heartbeats do not consume reload budget | `WidgetDisplayTests` | PASS |
 | Swift shared-core suite | `CLANG_MODULE_CACHE_PATH="$PWD/.build/module-cache" swift test --disable-sandbox --scratch-path .build/tests --enable-code-coverage` | **13 tests, 0 failures** |
-| JavaScript suite | `node --experimental-test-coverage --test-coverage-include='**/Safari/Resources/*.js' --test Tests/JavaScript/*.test.cjs` | **14 tests, 0 failures** |
+| JavaScript suite | `node --experimental-test-coverage --test-coverage-include='**/Safari/Resources/*.js' --test Tests/JavaScript/*.test.cjs` | **15 tests, 0 failures** |
 | Safari + host + WidgetKit integration compilation | `xcodegen generate --spec project-safari.yml`, then `xcodebuild -project MacMusicWidget.xcodeproj -scheme MacMusicWidgetHost -configuration Debug -derivedDataPath .build/xcode-safari CODE_SIGNING_ALLOWED=NO build` | **BUILD SUCCEEDED** |
 | Safari resource packaging | Inspected built `.appex/Contents/Resources` | manifest, background, content, metadata helper and popup all present |
-| Signed Safari + host + WidgetKit Release build, 1.2.1 | `xcodebuild` with the local Apple Development identity, manual signing, matching Team and Team-prefixed App Group | **BUILD SUCCEEDED** |
-| Local installation and signatures | Installed to `/Applications/Mac Music Widget.app`; `codesign --verify --deep --strict`; version read from built Info.plist | PASS, 1.2.1; host and WidgetKit processes observed |
+| Signed Safari + host + WidgetKit Release build, 1.2.2 | `xcodebuild` with the local Apple Development identity, manual signing, matching Team and Team-prefixed App Group | **BUILD SUCCEEDED** |
+| Local installation and signatures | Installed to `/Applications/Mac Music Widget.app`; `codesign --verify --deep --strict`; version read from built Info.plist | PASS, 1.2.2; host and WidgetKit processes observed |
 | MIT notice in downloadable binary | Compared `Contents/Resources/LICENSE` to repository `LICENSE` | Identical |
 | Safari enablement and website access | Safari Settings UI: extension enabled; `youtube.com` allowed; manifest has only www/music hosts | PASS, private browsing and unsigned-extension setting left disabled |
 | Live Safari native bridge and host | Popup reports ready; local `/state` contains Music title/artwork, playing state, tab/document identity and renewing validity | PASS for actual YouTube Music; no Apple Events JavaScript setting required |
-| WidgetKit runtime | OS logs: successful timeline generation and artwork decoding; Notification Center UI shows installed widget and new refresh button | Partial; final title/image and transport acceptance remains separate |
+| WidgetKit runtime | OS logs: successful timeline generation and artwork decoding; Notification Center UI shows installed widget and new refresh button; user confirms title and image after 1.2.2 | PASS for installation/title/artwork; long-term refresh timing still needs observation |
+| Actual Music pause/resume command path | POST to the widget's document/video-bound loopback endpoint; observed pause, then restored original playing state | PASS, both observed in live host state; this does not claim a direct UI click on the AppIntent button |
 | Original music-only configuration | `./build.sh` (local XcodeGen on PATH) | **BUILD SUCCEEDED**, ad-hoc app produced; not launched or installed |
 | Original license and browser adapters | `git diff upstream/main -- LICENSE Host/Bridge.swift Host/Browser.swift` | Unchanged |
 | Formatting | `git diff --check` | PASS |
@@ -41,11 +42,11 @@ Xcode emitted simulator-service diagnostics in the restricted environment and or
 
 Measured Swift shared-core line coverage: **214/247 lines (86.6%)**. Per file: `WebMedia.swift` 91.0%, `WidgetDisplaySnapshot.swift` 90.9%, `WidgetReloadGate.swift` 100%, `LoopbackRequest.swift` 90.0%, existing/extended `NowPlaying.swift` 66.0%.
 
-Node/V8 coverage for the four exercised extension JavaScript files reports **100% lines, 85.7% branches, 85.2% functions**. VM fixture coverage is not proof of Safari compatibility; line metrics especially overstate confidence for compact one-line callbacks. These numbers are not coverage for the entire host app, AppIntent integration, native extension lifecycle or WidgetKit rendering.
+Node/V8 coverage for the four exercised extension JavaScript files reports **99.5% lines, 83.0% branches, 82.1% functions**. VM fixture coverage is not proof of Safari compatibility; line metrics especially overstate confidence for compact one-line callbacks. These numbers are not coverage for the entire host app, AppIntent integration, native extension lifecycle or WidgetKit rendering.
 
 An earlier restricted identity lookup reported no valid signing identities. A lookup with the appropriate local access found the user's valid Apple Development identity, and signed installation/App Group IPC was subsequently verified. The previous signing blocker is resolved. This is a personal development-signed build, not a notarized public release.
 
-Live installation reproduced a separate display bug: 1.2.0 replaced title/artwork with `Safari update unavailable` after its 45-second browser lease, even while fresh host data existed. The user confirmed that exact message. Version 1.2.1 retains display content, marks stale content after five minutes, and provides a refresh AppIntent. Regression tests pass; final visual and transport acceptance is still recorded below rather than inferred from compilation.
+Live installation reproduced a separate display bug: 1.2.0 replaced title/artwork with `Safari update unavailable` after its 45-second browser lease, even while fresh host data existed. The user confirmed that exact message. Version 1.2.1 retains display content, marks stale content after five minutes, and provides a refresh AppIntent. Version 1.2.2 also avoids replacing the browser's `MediaMetadata` global, selects the actual player's video ahead of unrelated page videos, and reports page delivery diagnostics in the popup. Both newly modeled adapter cases failed before the fix. The user confirmed title/artwork with 1.2.2; the actual Music pause/resume transport path passed. The two adapter changes were installed together, so the live failure is not attributed conclusively to one of them alone.
 
 Updating the app can invalidate content scripts in already-open Safari tabs. Reload the tab and resume playback after each installation. This was observed during the live installation; the native popup could report ready while an old tab no longer submitted metadata.
 
@@ -65,6 +66,8 @@ There was no external plan file. Tests were derived from the user journeys above
 | YouTube Music RED | `136546f` | New Music metadata helper/native identity tests failed before the adapter existed. |
 | YouTube Music GREEN | `55c8a7b` | Eleven Swift and fourteen JS tests passed; signed 1.2.0 installed and live Music metadata received. |
 | Widget display RED | `e4f1f3b` | User-reproduced blank display regression; tests could not find the new `WidgetDisplaySnapshot` policy. |
+| Widget display GREEN | `529a1ab` | Thirteen Swift tests passed; signed 1.2.1 built and installed with a refresh control. |
+| Page adapter RED | `a933305` | Two JS tests failed: native `MediaMetadata` was overwritten, and an unrelated unready video hid Music metadata. |
 
 These checkpoints remain reachable on `feat/safari-youtube-notification-widget`. Preserve this table in any later squash so the RED/GREEN evidence remains reviewable.
 
@@ -76,19 +79,19 @@ Use the README's signing/install steps first. Keep the host running and add the 
 |---|---|---|
 | Enable extension and grant youtube.com access | Toolbar native status succeeds; host reads the same App Group | PASS for www/music permission and Music native IPC |
 | Play YouTube Music, including a URL without a watch ID | Correct title/artwork/playing state reaches host | PASS; sustained renewing state observed after tab reload |
-| 1.2.1 display repair | No blank screen after 45 seconds; stale marker/manual refresh after five minutes | Automated PASS; installed UI exposes refresh; final visual acceptance pending |
+| 1.2.2 display repair | Preserve title/artwork despite short browser lease; stale marker/manual refresh after five minutes | Regression tests PASS; user confirmed title/image; sustained five-minute visual timing not measured |
 | Play a regular public YouTube video | Correct title/thumbnail and playing state in small and medium widgets | Not run |
-| Pause/resume from Safari and widget | State follows; widget controls affect only the displayed tab/video | Not run |
+| Pause/resume from Safari and widget | State follows; widget controls affect only the displayed tab/video | Music transport endpoint → Safari pause/resume PASS; direct AppIntent UI click not verified |
 | Playlist first/middle/last item | Previous/next reflects enabled YouTube buttons; no invented browser-history behavior | Not run |
 | Two tabs, two windows, multiple Safari profiles | Playing/newest transition wins; no cross-tab/profile command | Not run |
 | Navigate to another video while widget is stale | Old widget controls are ignored until target matches | Not run |
 | Ads, autoplay transition, title change, live video | No previous-video/ad metadata mismatch; no fake progress for general videos | Not run |
-| Close tab, quit Safari, revoke permission, disable extension | Host excludes expired snapshot; widget eventually expires/reloads | Not run |
+| Close tab, quit Safari, revoke permission, disable extension | Host excludes expired snapshot; widget shows unavailable on next fetch, or marks last observation stale while waiting | Not run |
 | Suspend tab or sleep/wake Mac | Expired commands never replay; fresh data resumes when Safari runs again | Not run |
 | Private window, Shorts, external embeds, Instagram reel/post | No supported snapshot from those pages | Not run |
 | Safari autoplay rejection | No optimistic play-state update; manually play in Safari to recover | Not run |
 | Thumbnail network failure / restricted video | Title/state remains usable where available; image placeholder, no DRM workaround | Not run |
-| Spotify / Apple Music / YouTube Music | Existing reading/artwork/controls/source switching still work | Not run |
+| Spotify / Apple Music / legacy YouTube Music | Existing reading/artwork/controls/source switching still work | Not run; new Safari Music path checked separately above |
 | Notification Center visible/hidden over time | Measure real throttling and expiry; never infer latency from the two-second poll interval | Not run |
 
 Known follow-ups after signed testing: improve user-visible command failure reporting if needed; validate DOM against actual YouTube changes; consider less aggressive expiry/renewal only after measuring real WidgetKit behavior. Other streaming sites need individual adapters and tests. **Instagram remains excluded**, including in any future optional system Now Playing path.
