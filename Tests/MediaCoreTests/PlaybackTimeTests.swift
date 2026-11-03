@@ -66,4 +66,14 @@ final class PlaybackTimeTests: XCTestCase {
         XCTAssertTrue(entries.last!.isStale)
         XCTAssertEqual(entries.last!.date, captured.addingTimeInterval(300))
     }
+
+    func testLiveRadioWithoutAClockDoesNotRequestPeriodicSeekCorrections() {
+        var gate = WidgetReloadGate()
+        var state = NowPlaying.empty
+        state.hasTab = true; state.isPlaying = true; state.title = "Live radio"
+        state.capturedAt = captured
+        XCTAssertTrue(gate.shouldReload(state, now: captured))
+        state.capturedAt = captured.addingTimeInterval(35)
+        XCTAssertFalse(gate.shouldReload(state, now: state.capturedAt))
+    }
 }
