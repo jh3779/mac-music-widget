@@ -13,7 +13,8 @@ struct WidgetReloadGate {
         current.elapsed = 0
         current.validUntil = nil
         let positionChanged = lastTiming.map {
-            abs(next.elapsed - $0.playbackTime.position(since: $0.capturedAt, at: next.capturedAt)) > 2
+            next.playbackTime.hasDuration && $0.playbackTime.hasDuration &&
+                abs(next.elapsed - $0.playbackTime.position(since: $0.capturedAt, at: next.capturedAt)) > 2
         } ?? false
         let changed = lastState != current || positionChanged
         guard force || changed else { return false }
