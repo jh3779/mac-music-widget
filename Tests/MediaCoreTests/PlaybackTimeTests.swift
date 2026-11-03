@@ -53,4 +53,17 @@ final class PlaybackTimeTests: XCTestCase {
         state.elapsed = 150; state.capturedAt = captured.addingTimeInterval(36)
         XCTAssertTrue(gate.shouldReload(state, now: state.capturedAt))
     }
+
+    func testNonUnitSpeedUsesBoundedTimelineSamplesAndEndsWithStaleState() {
+        var state = NowPlaying.empty
+        state.hasTab = true; state.isPlaying = true; state.duration = 600; state.elapsed = 20
+        state.playbackRate = 2; state.isAdvancing = true; state.capturedAt = captured
+        state.validUntil = captured.addingTimeInterval(45)
+        let entries = WidgetDisplaySnapshot.timeline(for: state, now: captured)
+        XCTAssertEqual(entries.count, 11)
+        XCTAssertEqual(entries[1].date, captured.addingTimeInterval(30))
+        XCTAssertEqual(entries[1].state.playbackTime.position(since: captured, at: entries[1].date), 80)
+        XCTAssertTrue(entries.last!.isStale)
+        XCTAssertEqual(entries.last!.date, captured.addingTimeInterval(300))
+    }
 }
