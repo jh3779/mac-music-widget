@@ -243,6 +243,42 @@ test('popup reports native bridge success, error and connection failure', async 
     } } });
     load('popup', ctx);
     await new Promise(resolve => setImmediate(resolve));
-    assert.match(status.textContent, outcome.ok ? /ready/ : outcome instanceof Error ? /unavailable/ : /Group unavailable/);
+    assert.match(status.textContent, outcome.ok ? /Safari/ : outcome instanceof Error ? /연결/ : /Group unavailable/);
+  }
+});
+
+test('approved empty pages report the observed source without trusting page input', async () => {
+  const b = background();
+  await b.send({ kind: 'snapshot', snapshot: null, source: 'instagram' });
+  assert.equal(b.calls.at(-1).source, 'safariYouTube');
+  await b.send({ kind: 'snapshot', snapshot: null }, { url: 'https://music.youtube.com/', frameId: 0, tab: { id: 43 } });
+  assert.equal(b.calls.at(-1).source, 'youtubeMusic');
+  b.remove(999);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(b.calls.at(-1).source, undefined);
+});
+test('popup uses durable page evidence after a background restart', async () => {
+  const status = { textContent: '' };
+  const ctx = vm.createContext({ document: { getElementById() { return status; } }, browser: { runtime: {
+    async sendMessage() { return { ok: true, connectionState: 'ready', pageStatus: 'No page messages yet.' }; }
+  } } });
+  load('popup', ctx);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.match(status.textContent, /재생 정보 수신 중/);
+  assert.doesNotMatch(status.textContent, /No page messages/);
+});
+test('popup exposes only fixed native recovery actions and never inserts media HTML', async () => {
+  for (const invalid of [false, true]) {
+    const elements = { status: { textContent: '' }, app: { hidden: true }, settings: { hidden: true } };
+    const ctx = vm.createContext({ document: { getElementById(id) { return elements[id]; } }, browser: { runtime: {
+      async sendMessage() { return { ok: true, connectionState: 'ready',
+        appURL: invalid ? 'javascript:alert(1)' : 'com.example.media://open',
+        settingsURL: invalid ? 'com.example.media://safari-settings?url=https://evil.test' : 'com.example.media://safari-settings' }; }
+    } } });
+    load('popup', ctx);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(elements.app.hidden, invalid);
+    assert.equal(elements.settings.hidden, invalid);
+    if (!invalid) assert.equal(elements.app.href, 'com.example.media://open');
   }
 });

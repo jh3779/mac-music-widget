@@ -19,9 +19,9 @@ browser.runtime.onMessage.addListener((message, sender) => {
   const tabID = sender.tab.id;
   lastPageAt = Date.now();
   pageStatus = message.snapshot ? 'Player metadata received.' : String(message.diagnostic || 'No supported media currently loaded.').slice(0, 160);
-  if (message.snapshot === null) return native({ kind: 'clear', version: 1, tabID });
-  const value = message.snapshot;
   const isMusic = MacMusicWidgetMedia.isMusicURL(sender.url);
+  if (message.snapshot === null) return native({ kind: 'clear', version: 1, tabID, source: isMusic ? 'youtubeMusic' : 'safariYouTube' });
+  const value = message.snapshot;
   const identityMatches = value && (isMusic
     ? value.source === 'youtubeMusic' && /^[0-9a-f-]{36}$/i.test(value.videoID)
     : value.source !== 'youtubeMusic' && value.videoID === MacMusicWidgetMedia.videoID(sender.url));

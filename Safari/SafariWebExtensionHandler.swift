@@ -15,17 +15,22 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 guard let message,
                       JSONSerialization.isValidJSONObject(message),
                       try JSONSerialization.data(withJSONObject: message).count <= 8192,
-                      WebMediaSnapshot.validTabID(message["version"]) == 1,
-                      let store = WebMediaStore.configured() else {
+                      WebMediaSnapshot.validTabID(message["version"]) == 1 else {
+                    throw WebMediaError.invalidMessage
+                }
+                guard let store = WebMediaStore.configured() else {
                     throw WebMediaError.unavailableContainer
                 }
                 switch message["kind"] as? String {
-                case "ping": break
+                case "ping":
+                    try store.recordPing(profile: profile)
+                    response["connectionState"] = store.connectionState().rawValue
                 case "clear":
                     guard let tabID = WebMediaSnapshot.validTabID(message["tabID"]) else {
                         throw WebMediaError.invalidMessage
                     }
-                    try store.remove(tabID: tabID, profile: profile)
+                    if let source = message["source"], !(source is String) { throw WebMediaError.invalidMessage }
+                    try store.remove(tabID: tabID, profile: profile, source: message["source"] as? String)
                 case "snapshot":
                     let snapshot = try WebMediaSnapshot.decode(message)
                     try store.save(snapshot, profile: profile)
@@ -37,8 +42,11 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 default: throw WebMediaError.invalidMessage
                 }
             } catch {
-                response = ["ok": false, "error": "Cannot share Safari metadata. Check the matching App Group and signing for host and Safari extension."]
+                let state: MediaConnectionState = (error as? WebMediaError) == .unavailableContainer ? .configurationRequired : .reconnectPage
+                response = ["ok": false, "connectionState": state.rawValue, "error": state.message]
             }
+            response["appURL"] = HostAppLink.url(.open, extensionIdentifier: Bundle.main.bundleIdentifier)?.absoluteString
+            response["settingsURL"] = HostAppLink.url(.safariSettings, extensionIdentifier: Bundle.main.bundleIdentifier)?.absoluteString
             let reply = NSExtensionItem()
             reply.userInfo = [SFExtensionMessageKey: response]
             context.completeRequest(returningItems: [reply], completionHandler: nil)

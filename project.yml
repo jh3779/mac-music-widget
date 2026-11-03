@@ -10,8 +10,8 @@ settings:
     CODE_SIGNING_REQUIRED: "YES"
     CODE_SIGNING_ALLOWED: "YES"
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "1.3.0"
-    CURRENT_PROJECT_VERSION: "6"
+    MARKETING_VERSION: "1.4.0"
+    CURRENT_PROJECT_VERSION: "7"
     ENABLE_HARDENED_RUNTIME: "YES"
 targets:
   MacMusicWidgetHost:
@@ -35,6 +35,9 @@ targets:
         CFBundleDisplayName: Mac Music Widget
         CFBundleIconFile: AppIcon
         LSUIElement: true
+        CFBundleURLTypes:
+          - CFBundleURLName: $(PRODUCT_BUNDLE_IDENTIFIER)
+            CFBundleURLSchemes: [$(PRODUCT_BUNDLE_IDENTIFIER)]
         NSAppleEventsUsageDescription: "Reads the currently playing track from Apple Music, Spotify or your browser, and sends playback commands to it."
         NSHighResolutionCapable: true
     entitlements:

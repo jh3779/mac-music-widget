@@ -23,6 +23,7 @@ struct NowPlaying: Codable, Equatable {
     /// False when there's no music.youtube.com tab, so the widget can show a real reason.
     var hasTab: Bool = false
     var statusNote: String = ""
+    var connectionState: MediaConnectionState? = nil
     /// When the host captured this. The widget extrapolates `elapsed` from it so the progress
     /// bar keeps moving between refreshes instead of freezing at the last polled value.
     var capturedAt: Date = .init(timeIntervalSince1970: 0)
@@ -34,9 +35,7 @@ struct NowPlaying: Codable, Equatable {
     var canGoNext: Bool? = nil
     var canGoPrevious: Bool? = nil
 
-    /// Whether the source switcher should currently be visible. Widgets have no hover state, so
-    /// "reveal on interaction" is the closest achievable behaviour: the host sets this for a few
-    /// seconds after any button press, then it hides itself again.
+    /// Kept in the wire contract for older host/widget versions.
     var showSourceButton: Bool = false
 
     /// What the user picked in the widget: "auto", "youtubeMusic", "spotify", "appleMusic".
@@ -47,6 +46,12 @@ struct NowPlaying: Codable, Equatable {
     /// Whichever source is actually on screen — the pinned one, or what "auto" resolved to.
     var effectiveSource: String {
         sourceSelection == "auto" ? sourceActive : sourceSelection
+    }
+
+    var creatorRole: String { effectiveSource == "safariYouTube" ? "채널" : "아티스트" }
+    var creatorLabel: String {
+        let name = artist.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+        return name.isEmpty ? creatorRole + " 정보 없음" : name
     }
 
     /// Glyph for the source button. Deliberately generic SF Symbols rather than brand logos:

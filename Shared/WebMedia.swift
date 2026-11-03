@@ -135,9 +135,60 @@ struct WebMediaStore {
         }
     }
 
-    func remove(tabID: Int, profile: String) throws {
+    func remove(tabID: Int, profile: String, source: String? = nil, now: Date = Date()) throws {
         let url = try file(tabID: tabID, profile: profile)
+        if let source, !["safariYouTube", "youtubeMusic"].contains(source) { throw WebMediaError.invalidMessage }
+        let knownSource = source ?? read(url).map { $0.source ?? "safariYouTube" }
         if FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) }
+        // Global Safari close/navigation events also include unrelated tabs. Only an
+        // approved page or an existing snapshot can create a minimal health record.
+        if let knownSource {
+            try writeContact(Contact(receivedAt: now, source: knownSource),
+                             name: "\(profile)-\(tabID)", now: now)
+        }
+    }
+
+    private struct Contact: Codable { let receivedAt: Date; let source: String? }
+    private var healthDirectory: URL { directory.appendingPathComponent("Health", isDirectory: true) }
+    private func contacts(now: Date) -> [(URL, Contact)] {
+        let urls = (try? FileManager.default.contentsOfDirectory(at: healthDirectory, includingPropertiesForKeys: nil)) ?? []
+        return urls.compactMap { url in
+            guard url.pathExtension == "json", let data = try? Data(contentsOf: url), data.count <= 1024,
+                  let item = try? JSONDecoder().decode(Contact.self, from: data),
+                  item.receivedAt <= now, now.timeIntervalSince(item.receivedAt) < 600 else { return nil }
+            return (url, item)
+        }
+    }
+
+    private func writeContact(_ contact: Contact, name: String, now: Date) throws {
+        try FileManager.default.createDirectory(at: healthDirectory, withIntermediateDirectories: true)
+        let url = healthDirectory.appendingPathComponent(name + ".json")
+        try JSONEncoder().encode(contact).write(to: url, options: .atomic)
+        let recent = contacts(now: now).sorted { $0.1.receivedAt > $1.1.receivedAt }
+        let keep = Set(recent.prefix(64).map { $0.0 })
+        for candidate in (try? FileManager.default.contentsOfDirectory(at: healthDirectory, includingPropertiesForKeys: nil)) ?? [] {
+            if !keep.contains(candidate) { try? FileManager.default.removeItem(at: candidate) }
+        }
+    }
+
+    func recordPing(profile: String, now: Date = Date()) throws {
+        _ = try file(tabID: 0, profile: profile)
+        try writeContact(Contact(receivedAt: now, source: nil), name: profile + "-ping", now: now)
+    }
+
+    func connectionState(source: String? = nil, now: Date = Date()) -> MediaConnectionState {
+        let snapshots = files().compactMap(read).filter {
+            $0.receivedAt <= now && (source == nil || ($0.source ?? "safariYouTube") == source)
+        }
+        if snapshots.contains(where: { $0.expiresAt > now }) { return .ready }
+        let contact = contacts(now: now).map { $0.1 }
+        let clear = contact.filter { $0.source != nil && (source == nil || $0.source == source) }
+            .map { $0.receivedAt }.max()
+        if let latest = snapshots.map({ $0.receivedAt }).max(), latest > (clear ?? .distantPast) {
+            return .updatesDelayed
+        }
+        if clear != nil { return .waitingForMedia }
+        return contact.isEmpty ? .extensionNotConnected : .reconnectPage
     }
 
     func enqueue(_ action: SafariCommand.Action, for snapshot: WebMediaSnapshot, now: Date = Date()) throws {
