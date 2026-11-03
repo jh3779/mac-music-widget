@@ -173,17 +173,18 @@ struct MusicWidgetView: View {
     }
 
     private var small: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            artwork(size: 46)
+        VStack(alignment: .leading, spacing: 4) {
+            artwork(size: 36)
             Text(state.title.isEmpty ? "—" : state.title)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: 12, weight: .semibold))
                 .lineLimit(2)
             Text(playbackLabel)
-                .font(.system(size: 11))
+                .font(.system(size: 10))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
+            progress
             Spacer(minLength: 0)
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 Button(intent: PreviousTrackIntent(documentID: state.webDocumentID, videoID: state.webVideoID)) { Image(systemName: "backward.fill") }
                     .disabled(entry.isStale || state.canGoPrevious == false)
                     .accessibilityLabel("Previous")
@@ -195,10 +196,10 @@ struct MusicWidgetView: View {
                     .disabled(entry.isStale || state.canGoNext == false)
                     .accessibilityLabel("Next")
                 refreshButton
+                if state.showSourceButton { sourceButton }
             }
             .buttonStyle(.plain)
             .font(.system(size: 13, weight: .semibold))
-            if state.showSourceButton { sourceButton }
         }
     }
 
@@ -223,7 +224,7 @@ struct MusicWidgetView: View {
                     .lineLimit(1)
 
                 Spacer(minLength: 2)
-                if state.webDocumentID == nil { progress }
+                progress
                 Spacer(minLength: 2)
 
                 HStack(spacing: 16) {
@@ -281,36 +282,46 @@ struct MusicWidgetView: View {
         .help(state.sourceLabel)
     }
 
-    /// A widget can't tick once a second, but `ProgressView(timerInterval:)` animates on its own
-    /// between reloads, so the bar keeps moving without burning refreshes.
+    /// System timer views advance without a new WidgetKit timeline each second.
     @ViewBuilder
     private var progress: some View {
-        if state.duration <= 0 {
-            // Live radio genuinely has no duration or seek position, so a progress bar would
-            // just sit empty at zero. Label it instead.
-            if state.isPlaying {
-                Text("LIVE")
-                    .font(.system(size: 9, weight: .heavy))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 2)
-                    .background(.white.opacity(0.16), in: Capsule())
-            }
+        let timing = state.playbackTime
+        if timing.isLive {
+            Text("LIVE")
+                .font(.system(size: 9, weight: .heavy))
+                .foregroundStyle(.secondary)
         } else {
-            let start = state.capturedAt.addingTimeInterval(-state.elapsed)
-            let end = start.addingTimeInterval(state.duration)
-            if state.isPlaying {
-                ProgressView(timerInterval: start...end, countsDown: false) {
-                    EmptyView()
-                } currentValueLabel: {
-                    EmptyView()
+            VStack(spacing: 3) {
+                HStack(spacing: 2) {
+                    if let interval = timing.timerInterval(since: state.capturedAt), !entry.isStale {
+                        Text(timerInterval: interval, countsDown: false, showsHours: timing.duration >= 3_600)
+                            .multilineTextAlignment(.leading)
+                    } else {
+                        Text(PlaybackTime.clock(timing.position(since: state.capturedAt, at: entry.date)))
+                    }
+                    Spacer(minLength: 0)
+                    Text("/ " + (timing.hasDuration ? PlaybackTime.clock(timing.duration) : "--:--"))
+                    if timing.rate != 1 { Text("×" + String(format: "%g", timing.rate)) }
                 }
-                .progressViewStyle(.linear)
-                .tint(.white)
-            } else {
-                ProgressView(value: min(state.elapsed / state.duration, 1))
-                    .progressViewStyle(.linear)
-                    .tint(.white.opacity(0.7))
+                .font(.system(size: family == .systemSmall ? 9 : 10))
+                .monospacedDigit()
+                .lineLimit(1)
+                .foregroundStyle(.secondary)
+                if timing.hasDuration {
+                    if let interval = timing.timerInterval(since: state.capturedAt), !entry.isStale {
+                        ProgressView(timerInterval: interval, countsDown: false) {
+                            EmptyView()
+                        } currentValueLabel: {
+                            EmptyView()
+                        }
+                        .progressViewStyle(.linear)
+                        .tint(.white)
+                    } else {
+                        ProgressView(value: timing.position(since: state.capturedAt, at: entry.date) / timing.duration)
+                            .progressViewStyle(.linear)
+                            .tint(.white.opacity(0.7))
+                    }
+                }
             }
         }
     }
