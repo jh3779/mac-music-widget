@@ -46,7 +46,7 @@ test('native commands route to the reporting tab; close and navigation clear met
 function content(music = false) {
   let listener, heartbeat;
   const events = {}, sent = [];
-  let video = { currentSrc: 'blob:https://music.youtube.com/resource-A', paused: true, ended: false, readyState: 4, async play() { this.paused = false; }, pause() { this.paused = true; } };
+  let video = { currentSrc: 'blob:https://music.youtube.com/resource-A', currentTime: 83.5, duration: 296, playbackRate: 1, seeking: false, paused: true, ended: false, readyState: 4, async play() { this.paused = false; }, pause() { this.paused = true; } };
   let playerAvailable = true;
   const next = { disabled: false, getAttribute() { return null; }, getClientRects() { return [1]; }, clicks: 0, click() { this.clicks++; } };
   const previous = { ...next, getClientRects() { return []; } };
@@ -70,6 +70,24 @@ function content(music = false) {
     replaceVideo(value) { video = value; }, setPlayerAvailable(value) { playerAvailable = value; },
     mediaEvent(type, target = video) { events[type]({ type, target }); }, heartbeat: () => heartbeat() };
 }
+test('page timing reaches the native boundary without changing the music target on every tick', async () => {
+  for (const music of [false, true]) {
+    const c = content(music);
+    const first = c.sent[0].snapshot;
+    assert.equal(first.elapsed, 83.5); assert.equal(first.duration, 296);
+    c.video.currentTime = 90;
+    c.video.paused = false;
+    c.heartbeat();
+    const latest = c.sent.at(-1).snapshot;
+    assert.equal(latest.videoID, first.videoID);
+    assert.equal(latest.elapsed, 90);
+    const b = background();
+    const sender = { url: c.location.href, frameId: 0, tab: { id: 42 } };
+    assert.equal((await b.send({ kind: 'snapshot', snapshot: latest }, sender)).ok, true);
+    assert.equal(b.calls[0].elapsed, 90); assert.equal(b.calls[0].duration, 296);
+    assert.equal(b.calls[0].isAdvancing, true);
+  }
+});
 test('Music rejects the previous song target when its resource changes before the title', async () => {
   const c = content(true);
   const before = c.sent[0].snapshot;

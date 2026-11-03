@@ -15,7 +15,17 @@ struct WidgetDisplaySnapshot {
         guard staleAt > now else {
             return [Self(date: now, state: state, isStale: true)]
         }
-        return [Self(date: now, state: state, isStale: false),
-                Self(date: staleAt, state: state, isStale: true)]
+        var entries = [Self(date: now, state: state, isStale: false)]
+        let timing = state.playbackTime
+        if timing.hasDuration, timing.isAdvancing, timing.rate != 1 {
+            // The system clock is 1x only; bounded 30-second samples keep other
+            // speeds honest without requesting a host reload on every tick.
+            for offset in stride(from: 30.0, to: 300.0, by: 30.0) {
+                let date = now.addingTimeInterval(offset)
+                if date < staleAt { entries.append(Self(date: date, state: state, isStale: false)) }
+            }
+        }
+        entries.append(Self(date: staleAt, state: state, isStale: true))
+        return entries
     }
 }

@@ -7,6 +7,22 @@ function api() {
   vm.runInContext(fs.readFileSync('Safari/Resources/media.js', 'utf8'), context, { filename: require('node:path').resolve('Safari/Resources/media.js') });
   return context.MacMusicWidgetMedia;
 }
+test('both adapters carry finite time, speed and buffering state; live duration is not serialized as infinity', () => {
+  const m = api();
+  const input = { url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', pageVideoID: 'dQw4w9WgXcQ', title: 'Video',
+    paused: false, ended: false, readyState: 4, currentTime: 83.5, duration: 296, playbackRate: 1 };
+  for (const snapshot of [m.snapshot(input), m.musicSnapshot({ ...input, url: 'https://music.youtube.com/' })]) {
+    assert.equal(snapshot.elapsed, 83.5); assert.equal(snapshot.duration, 296);
+    assert.equal(snapshot.playbackRate, 1); assert.equal(snapshot.isAdvancing, true);
+  }
+  assert.equal(m.snapshot({ ...input, readyState: 2 }).isAdvancing, false);
+  assert.equal(m.snapshot({ ...input, seeking: true }).isAdvancing, false);
+  assert.equal(m.snapshot({ ...input, paused: true }).isAdvancing, false);
+  const live = m.snapshot({ ...input, duration: Infinity });
+  assert.equal(live.duration, 0); assert.equal(live.isLive, true);
+  assert.equal(m.snapshot({ ...input, currentTime: NaN, duration: NaN }).elapsed, 0);
+  assert.equal(m.snapshot({ ...input, currentTime: 500 }).elapsed, 296);
+});
 test('the helper does not replace the browser MediaMetadata API', () => {
   const original = class MediaMetadata {};
   const context = vm.createContext({ URL, MediaMetadata: original });

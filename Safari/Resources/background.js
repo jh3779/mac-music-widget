@@ -34,7 +34,9 @@ browser.runtime.onMessage.addListener((message, sender) => {
   return native({ kind: 'snapshot', version: 1, tabID, videoID: value.videoID,
     source: isMusic ? 'youtubeMusic' : 'safariYouTube', artworkURL: isMusic ? String(value.artworkURL || '').slice(0, 2048) : '',
     documentID: value.documentID, canGoNext: value.canGoNext, canGoPrevious: value.canGoPrevious,
-    title: value.title.slice(0, 512), author: value.author.slice(0, 256), isPlaying: value.isPlaying
+    title: value.title.slice(0, 512), author: value.author.slice(0, 256), isPlaying: value.isPlaying,
+    elapsed: value.elapsed ?? 0, duration: value.duration ?? 0, playbackRate: value.playbackRate ?? 1,
+    isAdvancing: value.isAdvancing ?? value.isPlaying, isLive: value.isLive ?? false
   }).then(async response => {
     if (!response?.ok) pageStatus = response?.error || 'Native metadata transfer failed.';
     if (response?.command) {

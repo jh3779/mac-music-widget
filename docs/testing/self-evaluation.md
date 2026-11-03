@@ -13,3 +13,7 @@ Overall: **4.0/5** for the agent review and merge preparation.
 Next improvements: finish real general-video/transport/music-app acceptance; observe longer WidgetKit timing; localize diagnostics consistently.
 
 Self-check: this supports a source merge decision with stated limits, not a universal or notarized release claim.
+
+## 1.3.0 playback-time follow-up — 2026-11-03
+
+Overall **3.8/5**: accuracy 4 (47 tests and signed build, live screen confirmation kept separate); completeness 3 (installed feature, pending actual timing/visual checks); clarity 4 (finite/live/unknown/rate behavior documented); actionability 4 (installed app and downloadable build); conciseness 4 (details remain in playback-time.md). Highest-impact next check is actual Small/Medium time display after refreshing the Safari tab. The system may delay corrections and non-1x samples; this is not a frame-synchronized player.

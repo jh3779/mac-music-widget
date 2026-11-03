@@ -12,6 +12,14 @@ struct NowPlaying: Codable, Equatable {
     var isPlaying: Bool = false
     var elapsed: Double = 0
     var duration: Double = 0
+    var playbackRate: Double? = nil
+    var isAdvancing: Bool? = nil
+    var isLive: Bool? = nil
+    var playbackTime: PlaybackTime {
+        PlaybackTime(elapsed: elapsed, duration: duration, rate: playbackRate ?? 1,
+                     isAdvancing: isPlaying && (isAdvancing ?? true),
+                     isLive: isLive ?? (webDocumentID == nil && duration <= 0 && isPlaying))
+    }
     /// False when there's no music.youtube.com tab, so the widget can show a real reason.
     var hasTab: Bool = false
     var statusNote: String = ""
