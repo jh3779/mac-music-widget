@@ -18,6 +18,16 @@ struct WebMediaSnapshot: Codable, Equatable {
     var changedAt: Date
     var source: String? = nil
     var musicArtworkURL: String? = nil
+    var elapsed: Double? = nil
+    var duration: Double? = nil
+    var playbackRate: Double? = nil
+    var isAdvancing: Bool? = nil
+    var isLive: Bool? = nil
+
+    var playbackTime: PlaybackTime {
+        PlaybackTime(elapsed: elapsed ?? 0, duration: duration ?? 0, rate: playbackRate ?? 1,
+                     isAdvancing: isPlaying && (isAdvancing ?? true), isLive: isLive ?? false)
+    }
 
     var artworkURL: String { source == "youtubeMusic" ? (musicArtworkURL ?? "") : "https://i.ytimg.com/vi/\(videoID)/hqdefault.jpg" }
     var expiresAt: Date { receivedAt.addingTimeInterval(Self.lifetime) }
@@ -54,9 +64,30 @@ struct WebMediaSnapshot: Codable, Equatable {
               let previous = message["canGoPrevious"] as? NSNumber, CFGetTypeID(previous) == CFBooleanGetTypeID() else { throw WebMediaError.invalidMessage }
         let title = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !title.isEmpty else { throw WebMediaError.invalidMessage }
+        let elapsed = try number(message["elapsed"], fallback: 0, maximum: PlaybackTime.maximum)
+        let duration = try number(message["duration"], fallback: 0, maximum: PlaybackTime.maximum)
+        let rate = try number(message["playbackRate"], fallback: 1, maximum: 16)
+        let advancing = try boolean(message["isAdvancing"], fallback: playing.boolValue)
+        let live = try boolean(message["isLive"], fallback: false)
         // Video artwork is constructed here; music artwork is restricted to HTTPS YouTube CDNs.
         return Self(tabID: tabID, videoID: videoID, title: title, author: author,
-                    isPlaying: playing.boolValue, documentID: documentID, canGoNext: next.boolValue, canGoPrevious: previous.boolValue, receivedAt: now, changedAt: now, source: source, musicArtworkURL: source == "youtubeMusic" ? artwork : nil)
+                    isPlaying: playing.boolValue, documentID: documentID, canGoNext: next.boolValue, canGoPrevious: previous.boolValue, receivedAt: now, changedAt: now, source: source, musicArtworkURL: source == "youtubeMusic" ? artwork : nil,
+                    elapsed: elapsed, duration: duration, playbackRate: rate, isAdvancing: advancing, isLive: live)
+    }
+
+    private static func number(_ value: Any?, fallback: Double, maximum: Double) throws -> Double {
+        guard let value else { return fallback }
+        guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID(),
+              number.doubleValue.isFinite, number.doubleValue >= 0, number.doubleValue <= maximum
+        else { throw WebMediaError.invalidMessage }
+        return number.doubleValue
+    }
+
+    private static func boolean(_ value: Any?, fallback: Bool) throws -> Bool {
+        guard let value else { return fallback }
+        guard let number = value as? NSNumber, CFGetTypeID(number) == CFBooleanGetTypeID()
+        else { throw WebMediaError.invalidMessage }
+        return number.boolValue
     }
 
     static func select(_ snapshots: [Self], now: Date = Date()) -> Self? {

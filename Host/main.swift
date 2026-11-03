@@ -116,6 +116,12 @@ final class HostDelegate: NSObject, NSApplicationDelegate {
         track.artist = snapshot.author
         track.artworkURL = snapshot.artworkURL
         track.isPlaying = snapshot.isPlaying
+        let timing = snapshot.playbackTime
+        track.elapsed = timing.position(since: snapshot.receivedAt, at: Date())
+        track.duration = timing.duration
+        track.playbackRate = timing.rate
+        track.isAdvancing = timing.isAdvancing
+        track.isLive = timing.isLive
         track.available = true
         track.webVideoID = snapshot.videoID
         track.webDocumentID = snapshot.documentID
@@ -217,6 +223,9 @@ final class HostDelegate: NSObject, NSApplicationDelegate {
         next.isPlaying = track.isPlaying
         next.elapsed = track.elapsed
         next.duration = track.duration
+        next.playbackRate = track.playbackRate
+        next.isAdvancing = track.isAdvancing
+        next.isLive = track.isLive
         next.webVideoID = track.webVideoID
         next.webDocumentID = track.webDocumentID
         next.validUntil = track.validUntil

@@ -34,6 +34,8 @@
       const snapshot = MacMusicWidgetMedia.musicSnapshot({ url: location.href,
         title: bar.querySelector('.title')?.textContent, author: bar.querySelector('.byline')?.textContent,
         artworkURL: bar.querySelector('img')?.src, paused: video.paused, ended: video.ended,
+        currentTime: video.currentTime, duration: video.duration, playbackRate: video.playbackRate,
+        seeking: video.seeking, isLive: player.classList.contains('ytp-live'),
         readyState: video.readyState, ad: !!player?.classList.contains('ad-showing'),
         canGoNext: enabled(bar.querySelector('.next-button')), canGoPrevious: enabled(bar.querySelector('.previous-button')) });
       if (!snapshot) { readNote = `Music metadata unavailable (ready=${video.readyState})`; return null; }
@@ -52,6 +54,8 @@
       title: page.querySelector('#title h1, h1.ytd-watch-metadata')?.textContent,
       author: page.querySelector('#owner #channel-name a')?.textContent,
       paused: video.paused, ended: video.ended, readyState: video.readyState,
+      currentTime: video.currentTime, duration: video.duration, playbackRate: video.playbackRate,
+      seeking: video.seeking, isLive: player.classList.contains('ytp-live'),
       canGoNext: enabled(player.querySelector('.ytp-next-button')),
       canGoPrevious: enabled(player.querySelector('.ytp-prev-button')),
       ad: player.classList.contains('ad-showing') || player.classList.contains('ad-interrupting')
@@ -60,7 +64,8 @@
   async function publish(force = false) {
     let snapshot = null;
     try { snapshot = read(); } catch { readNote = 'Page adapter could not read the player'; }
-    const signature = JSON.stringify(snapshot);
+    // Ordinary position ticks must not turn DOM mutations into extra native messages.
+    const signature = JSON.stringify(snapshot ? { ...snapshot, elapsed: 0 } : null);
     if (!force && signature === lastSignature && Date.now() - lastSentAt < 2000) return;
     lastSignature = signature;
     lastSentAt = Date.now();
@@ -88,7 +93,7 @@
     }
     schedule();
   }
-  for (const event of ['play', 'pause', 'ended', 'loadedmetadata', 'emptied']) {
+  for (const event of ['play', 'pause', 'ended', 'loadedmetadata', 'emptied', 'seeking', 'seeked', 'waiting', 'playing', 'ratechange', 'durationchange']) {
     document.addEventListener(event, mediaEvent, true);
   }
   document.addEventListener('yt-navigate-start', () => { navigating = true; void publish(true); });

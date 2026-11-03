@@ -9,6 +9,9 @@ struct SourceTrack {
     var isPlaying = false
     var elapsed: Double = 0
     var duration: Double = 0
+    var playbackRate: Double?
+    var isAdvancing: Bool?
+    var isLive: Bool?
     /// True when this source has something to show. False means "not running" or "nothing loaded".
     var available = false
     var note = ""
