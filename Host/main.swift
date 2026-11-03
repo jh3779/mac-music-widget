@@ -38,10 +38,6 @@ final class HostDelegate: NSObject, NSApplicationDelegate {
     private var remoteArtwork: [String: String] = [:]
     private var remoteArtworkInFlight: Set<String> = []
 
-    /// Any button press counts as "interacting"; the source switcher shows for this long after.
-    private var lastInteraction = Date.distantPast
-    private static let revealWindow: TimeInterval = 12
-
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
 
@@ -64,6 +60,16 @@ final class HostDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool { true }
+
+    func application(_ application: NSApplication, open urls: [URL]) {
+        guard let identifier = Bundle.main.bundleIdentifier else { return }
+        for url in urls {
+            guard let action = HostAppLink.action(for: url, hostIdentifier: identifier) else { continue }
+            if action == .safariSettings, sourceChoices.available.contains(.safariYouTube) { openSafariSettings() }
+            poll()
+            publishIfChanged(state, force: true)
+        }
+    }
 
     // MARK: Polling
 
@@ -105,13 +111,17 @@ final class HostDelegate: NSObject, NSApplicationDelegate {
     private func pollSafariYouTube(source: String = "safariYouTube") -> SourceTrack {
         var track = SourceTrack()
         guard let store = WebMediaStore.configured() else {
-            track.note = "Safari App Group not configured"
+            track.connectionState = .configurationRequired
+            track.note = MediaConnectionState.configurationRequired.message
             return track
         }
         guard let snapshot = WebMediaSnapshot.select(store.snapshots().filter { ($0.source ?? "safariYouTube") == source }) else {
-            track.note = "Enable Safari extension and play a YouTube video"
+            let connection = store.connectionState(source: source)
+            track.connectionState = connection
+            track.note = connection.message
             return track
         }
+        track.connectionState = .ready
         track.title = snapshot.title
         track.artist = snapshot.author
         track.artworkURL = snapshot.artworkURL
@@ -232,11 +242,12 @@ final class HostDelegate: NSObject, NSApplicationDelegate {
         next.canGoNext = track.canGoNext
         next.canGoPrevious = track.canGoPrevious
         next.hasTab = track.available
+        next.connectionState = track.connectionState
         next.statusNote = track.available ? "" : (track.note.isEmpty ? "Nothing playing" : track.note)
         next.capturedAt = Date()
         next.sourceSelection = sourceKind.rawValue
         next.sourceActive = kind.rawValue
-        next.showSourceButton = Date().timeIntervalSince(lastInteraction) < Self.revealWindow
+        next.showSourceButton = true
 
         let interactiveChange = Date() < interactionExpires &&
             (next.title != state.title || next.isPlaying != state.isPlaying || next.sourceSelection != state.sourceSelection)
@@ -265,17 +276,12 @@ final class HostDelegate: NSObject, NSApplicationDelegate {
     /// what the widget is actually showing.
     private func run(_ command: WidgetCommand, documentID: String?, videoID: String?) {
         if command != .cycleSource {
+            guard state.hasTab else { return }
             if state.webDocumentID != nil {
                 guard let documentID, let videoID, documentID == state.webDocumentID, videoID == state.webVideoID else { return }
             } else if documentID != nil || videoID != nil { return }
         }
         interactionExpires = Date().addingTimeInterval(8)
-        lastInteraction = Date()
-        // Publish again once the reveal window lapses, so the switcher actually disappears
-        // rather than lingering until the next unrelated state change.
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.revealWindow + 0.5) { [weak self] in
-            self?.poll()
-        }
 
         if command == .cycleSource {
             // Silence the source we're leaving, so switching doesn't end up with two players
@@ -323,6 +329,7 @@ final class HostDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func pauseCurrentSource() {
+        guard state.hasTab else { return }
         if state.webDocumentID != nil { sendSafari(.pause); return }
         switch resolvedKind {
         case .safariYouTube: sendSafari(.pause)

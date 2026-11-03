@@ -267,3 +267,18 @@ test('popup uses durable page evidence after a background restart', async () => 
   assert.match(status.textContent, /재생 정보 수신 중/);
   assert.doesNotMatch(status.textContent, /No page messages/);
 });
+test('popup exposes only fixed native recovery actions and never inserts media HTML', async () => {
+  for (const invalid of [false, true]) {
+    const elements = { status: { textContent: '' }, app: { hidden: true }, settings: { hidden: true } };
+    const ctx = vm.createContext({ document: { getElementById(id) { return elements[id]; } }, browser: { runtime: {
+      async sendMessage() { return { ok: true, connectionState: 'ready',
+        appURL: invalid ? 'javascript:alert(1)' : 'com.example.media://open',
+        settingsURL: invalid ? 'com.example.media://safari-settings?url=https://evil.test' : 'com.example.media://safari-settings' }; }
+    } } });
+    load('popup', ctx);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(elements.app.hidden, invalid);
+    assert.equal(elements.settings.hidden, invalid);
+    if (!invalid) assert.equal(elements.app.href, 'com.example.media://open');
+  }
+});

@@ -15,6 +15,7 @@ struct SourceTrack {
     /// True when this source has something to show. False means "not running" or "nothing loaded".
     var available = false
     var note = ""
+    var connectionState: MediaConnectionState?
     /// Raw cover art, for sources that hand over bytes instead of a URL (Apple Music).
     var webVideoID: String?
     var webDocumentID: String?

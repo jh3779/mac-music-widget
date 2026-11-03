@@ -11,14 +11,14 @@ enum HostClient {
         var request = URLRequest(url: Loopback.stateURL)
         request.timeoutInterval = 1.5
         request.cachePolicy = .reloadIgnoringLocalCacheData
-        guard let (data, _) = try? await URLSession.shared.data(for: request) else {
-            var offline = NowPlaying.empty
-            offline.statusNote = "Host app not running"
-            return offline
-        }
+        var offline = NowPlaying.empty
+        offline.connectionState = .hostUnavailable
+        offline.statusNote = MediaConnectionState.hostUnavailable.message
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              (response as? HTTPURLResponse)?.statusCode == 200 else { return offline }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        return (try? decoder.decode(NowPlaying.self, from: data)) ?? .empty
+        return (try? decoder.decode(NowPlaying.self, from: data)) ?? offline
     }
 
     static func send(_ command: WidgetCommand, documentID: String? = nil, videoID: String? = nil) async {
@@ -178,10 +178,8 @@ struct MusicWidgetView: View {
             Text(state.title.isEmpty ? "—" : state.title)
                 .font(.system(size: 12, weight: .semibold))
                 .lineLimit(2)
-            Text(playbackLabel)
+            creatorLine
                 .font(.system(size: 10))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
             progress
             Spacer(minLength: 0)
             HStack(spacing: 8) {
@@ -196,7 +194,7 @@ struct MusicWidgetView: View {
                     .disabled(entry.isStale || state.canGoNext == false)
                     .accessibilityLabel("Next")
                 refreshButton
-                if state.showSourceButton { sourceButton }
+                sourceButton
             }
             .buttonStyle(.plain)
             .font(.system(size: 13, weight: .semibold))
@@ -218,16 +216,14 @@ struct MusicWidgetView: View {
                     // title gets squeezed back to a single truncated line.
                     .fixedSize(horizontal: false, vertical: true)
                     .layoutPriority(1)
-                Text(playbackLabel)
+                creatorLine
                     .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
 
                 Spacer(minLength: 2)
                 progress
                 Spacer(minLength: 2)
 
-                HStack(spacing: 16) {
+                HStack(spacing: 12) {
                     Button(intent: PreviousTrackIntent(documentID: state.webDocumentID, videoID: state.webVideoID)) { Image(systemName: "backward.fill") }
                     .disabled(entry.isStale || state.canGoPrevious == false)
                     .accessibilityLabel("Previous")
@@ -241,10 +237,7 @@ struct MusicWidgetView: View {
                     .accessibilityLabel("Next")
                     refreshButton
 
-                    if state.showSourceButton {
-                        Spacer(minLength: 6)
-                        sourceButton
-                    }
+                    sourceButton
                 }
                 .buttonStyle(.plain)
                 .font(.system(size: 13, weight: .semibold))
@@ -256,9 +249,25 @@ struct MusicWidgetView: View {
     }
 
     private var playbackLabel: String {
-        if entry.isStale { return "업데이트 대기 · Safari" }
-        return state.webDocumentID != nil ? (state.isPlaying ? "Playing · Safari" : "Paused · Safari") : state.artist
+        entry.isStale ? "업데이트 대기" : (state.isPlaying ? "재생 중" : "일시정지")
     }
+
+    private var creatorLine: some View {
+        HStack(spacing: 4) {
+            Text(state.creatorLabel)
+                .lineLimit(1)
+                .accessibilityLabel(state.creatorRole + ": " + state.creatorLabel)
+                .layoutPriority(1)
+            Image(systemName: entry.isStale ? "clock.badge.exclamationmark" : (state.isPlaying ? "play.fill" : "pause.fill"))
+                .font(.system(size: family == .systemSmall ? 8 : 9))
+                .accessibilityLabel(playbackLabel)
+                .help(playbackLabel)
+        }
+        .foregroundStyle(.secondary)
+    }
+
+    private var appURL: URL? { HostAppLink.url(.open, extensionIdentifier: Bundle.main.bundleIdentifier) }
+    private var settingsURL: URL? { HostAppLink.url(.safariSettings, extensionIdentifier: Bundle.main.bundleIdentifier) }
 
     private var refreshButton: some View {
         Button(intent: RefreshMediaIntent()) { Image(systemName: "arrow.clockwise") }
@@ -279,7 +288,7 @@ struct MusicWidgetView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(state.sourceLabel)
-        .help(state.sourceLabel)
+        .help("소스 전환 · " + state.sourceLabel)
     }
 
     /// System timer views advance without a new WidgetKit timeline each second.
@@ -372,19 +381,32 @@ struct MusicWidgetView: View {
 
     private var unavailable: some View {
         VStack(spacing: 6) {
-            Image(systemName: "music.note.list")
-                .font(.system(size: 20, weight: .light))
-                .foregroundStyle(.secondary)
-            Text(state.statusNote.isEmpty ? "Not playing" : state.statusNote)
-                .font(.system(size: 12, weight: .medium))
+            Text(state.connectionState?.message ?? (state.statusNote.isEmpty ? "재생 중인 미디어 없음" : state.statusNote))
+                .font(.system(size: family == .systemSmall ? 10 : 12, weight: .medium))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
-            Button("새로 고침", intent: RefreshMediaIntent())
-                .buttonStyle(.plain)
-                .font(.system(size: 11, weight: .medium))
+                .fixedSize(horizontal: false, vertical: true)
+            if state.connectionState != .hostUnavailable {
+                HStack(spacing: 4) {
+                    sourceButton
+                    Text(state.sourceLabel).lineLimit(1)
+                }
+                .font(.system(size: 10))
+            }
+            HStack(spacing: 10) {
+                Button("새로 고침", intent: RefreshMediaIntent())
+                if let appURL { Link("앱 열기", destination: appURL) }
+                if family != .systemSmall, state.connectionState != nil, let settingsURL {
+                    Link("Safari 설정", destination: settingsURL)
+                }
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 11, weight: .medium))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .widgetURL(appURL)
     }
+
 }
 
 // MARK: - Entry point
